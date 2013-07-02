@@ -620,25 +620,29 @@ def populate_catalog():
     """
     global library
     global catalog
+
     prices_r = requests.get('http://api.scrollspost.com/v1/prices/1-day')
     prices = prices_r.json()
 
-    for library_item in library:
-        if library_item['tradable']:
-            card = get_card(library_item['typeId'])
+    if prices:
+        catalog = None
+        for library_item in library:
+            if library_item['tradable']:
+                card = get_card(library_item['typeId'])
 
-            if card['rarity'] == 0:
-                continue
-            for price_item in prices:
-                if price_item['card_id'] == card['id']:
-                    buy = price_item['price']['buy']
-                    suggested = price_item['price']['suggested']
-                    starting_bid = buy if buy > 0 else suggested
-                    auction_item = (price_item['name'], starting_bid)
-                    catalog.append(auction_item)
+                if card['rarity'] == 0:
+                    # skip commons
+                    continue
+                for price_item in prices:
+                    if price_item['card_id'] == card['id']:
+                        buy = price_item['price']['buy']
+                        suggested = price_item['price']['suggested']
+                        starting_bid = buy if buy > 0 else suggested
+                        auction_item = (price_item['name'], starting_bid)
+                        catalog.append(auction_item)
 
-    logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
-    random.shuffle(catalog)
+        logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
+        random.shuffle(catalog)
 
 
 def find_scroll_in_library(name):
