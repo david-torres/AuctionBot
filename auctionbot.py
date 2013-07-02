@@ -609,6 +609,14 @@ def library(message):
     populate_catalog()
 
 
+def bot_profile_info(message):
+    """
+    Retrieve's the bot's own profile
+    """
+    global bot_profile
+    bot_profile = message['profile']
+
+
 ###
 ### UTIL METHODS
 ###
@@ -653,14 +661,6 @@ def find_scroll_in_library(name):
             for library_item in library:
                 if card_type['id'] == library_item['typeId'] and library_item['tradable']:
                     return library_item
-
-
-def bot_profile_info(message):
-    """
-    Retrieve's the bot's own profile
-    """
-    global bot_profile
-    bot_profile = message['profile']
 
 
 def get_user(name):
