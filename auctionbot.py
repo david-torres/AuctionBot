@@ -230,7 +230,7 @@ def room_info(message):
     global live
     global profiles
 
-    profiles = profiles + message['profiles']
+    profiles.extend([profile for profile in message['profiles'] if not profile in profiles])
     logging.info('Updated user list. ' + ', '.join([p['name'] for p in profiles]))
 
     if live:
