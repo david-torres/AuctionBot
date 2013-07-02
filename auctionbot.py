@@ -633,7 +633,7 @@ def populate_catalog():
     prices = prices_r.json()
 
     if prices:
-        catalog = None
+        catalog = []
         for library_item in library:
             if library_item['tradable']:
                 card = get_card(library_item['typeId'])
