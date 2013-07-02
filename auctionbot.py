@@ -2,6 +2,7 @@ from ScrollsSocketClient import ScrollsSocketClient
 import threading
 import random
 import requests
+import logging
 import time
 import re
 
@@ -35,6 +36,7 @@ class AuctionThread(threading.Thread):
                 break
 
             current_auction = catalog.pop(0)
+            logging.info('Starting auction for ' + current_auction[0])
             starting_bid = current_auction[1]
             current_bid = current_auction[1]
             last_bid = None
@@ -188,6 +190,10 @@ completed_auction = None
 auction_thread = AuctionThread()
 
 
+###
+### MESSAGE RESPONSES
+###
+
 def run(message):
     global current_auction
 
@@ -225,6 +231,7 @@ def room_info(message):
     global profiles
 
     profiles = profiles + message['profiles']
+    logging.info('Updated user list. ' + ', '.join([p['name'] for p in profiles]))
 
     if live:
         announce()
@@ -265,6 +272,7 @@ def room_enter(message):
     """
     if message['roomName'] == room:
         text = bot_name + ' is activated.'
+        logging.info(text)
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
@@ -316,7 +324,7 @@ def process_bid(message):
 
             text = 'Registered bid from: "' + bidder + '", Bid: ' + str(bid_amount) + 'g'
             announce()
-
+    logging.info(text + ' for ' + current_auction[0])
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
@@ -336,6 +344,8 @@ def won_auction():
     text += 'SOLD! Auction: ' + current_auction[0] + '\n'
     text += 'High bidder: ' + highest_bidder + '\n'
     text += 'Closing bid: ' + str(current_bid) + 'g\n'
+
+    logging.info(text)
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
     send_trade_invite(user)
@@ -360,6 +370,8 @@ def resume_auction():
         text += 'Resuming! Auction: ' + current_auction[0] + '\n'
         text += 'High bidder: ' + highest_bidder + '\n'
         text += 'Current bid: ' + str(current_bid) + 'g\n'
+
+        logging.info(text)
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
         auction_end = None
@@ -388,6 +400,8 @@ def complete_auction():
     text += 'COMPLETED TRADE! Auction: ' + current_auction[0] + '\n'
     text += 'High bidder: ' + highest_bidder + '\n'
     text += 'Closing bid: ' + str(current_bid) + 'g\n'
+
+    logging.info(text)
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
     current_auction = None
@@ -419,6 +433,8 @@ def cancel_auction():
 
     text = '[[ ' + bot_name + ' ]]\n'
     text += 'Cancelled auction: ' + current_auction[0]
+
+    logging.info(text)
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
     current_auction = None
@@ -435,6 +451,7 @@ def cancel_auction():
 
 def send_trade_invite(user):
     scrolls.subscribe('TradeResponse', trade_invite_response)
+    logging.info('Sent trade invite to: ' + user['name'])
     scrolls.send({'msg': 'TradeInvite', 'profile': user['id']})
 
 
@@ -451,6 +468,8 @@ def trade_invite_response(message):
         scrolls.subscribe('TradeView', trade_view_response)
         card = find_scroll_in_library(current_auction[0])
         card_id = int(card['id'])
+
+        logging.info('Adding card to trade: ' + current_auction[0] + ', card id: ' + str(card_id))
         scrolls.send({'msg': 'TradeAddCards', 'cardIds': [card_id]})
     else:
         # bidder declinded the trade invite, BAN!
@@ -458,6 +477,8 @@ def trade_invite_response(message):
         text = '[[ ' + bot_name + ' ]]\n'
         text += 'DECLINED TRADE! Auction: ' + current_auction[0] + '\n'
         text += 'Banned: ' + highest_bidder + '\n'
+
+        logging.info('Trade was declined by ' + highest_bidder)
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
         resume_auction()
 
@@ -472,11 +493,15 @@ def trade_view_response(message):
 
     # bidder has accepted and traded the correct amount of gold
     if message['to']['accepted'] and message['to']['gold'] == current_bid:
+        logging.info('Accepted trade with ' + message['to']['profile']['name'])
+        logging.info('Gold: ' + str(message['to']['gold']))
         scrolls.send({'msg': 'TradeAcceptBargain'})
         scrolls.unsubscribe('TradeView')
         complete_auction()
     else:
+        # bidder takes too long to finish the trade, cancel
         if time.time() - auction_end > complete_auction_threshold:
+            logging.info('Cancelled trade with ' + message['to']['profile']['name'])
             scrolls.unsubscribe('TradeResponse')
             scrolls.send({'msg': 'TradeCancel'})
             ban(highest_bidder)
@@ -561,6 +586,7 @@ def help():
     text += 'Send !announce to see the current auction, high bidder, and current bid'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
+
 ###
 ### ONE-OFF RESPONSES
 ###
@@ -581,6 +607,7 @@ def library(message):
     global library
     library = message['cards']
     populate_catalog()
+
 
 ###
 ### UTIL METHODS
@@ -610,6 +637,7 @@ def populate_catalog():
                     auction_item = (price_item['name'], starting_bid)
                     catalog.append(auction_item)
 
+    logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
     random.shuffle(catalog)
 
 
@@ -656,18 +684,19 @@ def ban(bidder):
     add a user to the ban list
     """
     global banned
+    logging.info('Banned ' + bidder)
     banned.update({bidder: time.time()})
 
 
 def unban():
     """
-    remove all users from the ban list
-    whose time has been served
+    unban users who have served their time
     """
     global banned
     banned_local = dict(banned)
     for bad_user, time_banned in banned_local.iteritems():
         if time.time() - time_banned > ban_threshold:
+            logging.info('Unbanned ' + bad_user)
             banned.pop(bad_user)
 
 
@@ -687,6 +716,13 @@ def completed_auction_status():
             return False
         else:
             time.sleep(1)
+
+###
+### APP INIT
+###
+
+# init logging
+logging.basicConfig(filename="app.log", level=logging.INFO)
 
 # init the scrolls client
 scrolls = ScrollsSocketClient(email, password)
