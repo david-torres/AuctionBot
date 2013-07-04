@@ -557,7 +557,7 @@ def trade_view_response(message):
             ban(highest_bidder)
             text = '[[ ' + bot_name + ' ]]\n'
             text += 'FAILED TRADE! Auction: ' + current_auction['name'] + '\n'
-            text += 'Banned: ' + highest_bidder + '\n'
+            text += 'Banned: ' + highest_bidder
             scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
             resume_auction()
 
