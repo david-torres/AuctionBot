@@ -43,7 +43,7 @@ class AuctionThread(threading.Thread):
             current_auction = select_from_catalog()
             logging.info('Starting auction for ' + current_auction['name'] + ', card id: ' + str(current_auction['id']))
             starting_bid = current_auction['starting_bid']
-            current_bid = current_auction['starting_bid']
+            current_bid = 0
             last_bid = None
             live = False
             completed_auction = None
@@ -190,7 +190,7 @@ highest_bidder = None
 previous_bid = None
 previous_bidder = None
 live = False
-max_bid = 5000
+max_bid = 10000
 last_bid = None
 complete_auction_threshold = 60
 ban_threshold = 3600
@@ -345,7 +345,7 @@ def process_bid(message):
     bid_re = re.match('^((\d+)\s?g?){1}', bid)
 
     if not live:
-        text = 'No auctions are currently active.'
+        text = bidder + ', No auctions are currently active.'
     elif bidder in banned:
         text = 'Invalid bid from: "' + bidder + '", you are banned.'
     elif not user['acceptTrades']:
@@ -358,8 +358,10 @@ def process_bid(message):
         bid_amount = int(bid_re.group(2))
         if bidder == highest_bidder:
             text = 'Invalid bid from: "' + bidder + '", you are already the highest bidder. Current bid: ' + str(current_bid)
-        elif bid_amount <= current_bid:
+        elif current_bid > 0 and bid_amount <= current_bid:
             text = 'Invalid bid from: "' + bidder + '", bid too low. Current bid: ' + str(current_bid)
+        elif current_bid == 0 and bid_amount < starting_bid:
+            text = 'Invalid bid from: "' + bidder + '", bidding starts at: ' + str(starting_bid)
         elif bid_amount > max_bid:
             text = 'Invalid bid from: "' + bidder + '", bid is greater than max bid.'
         else:
@@ -372,6 +374,8 @@ def process_bid(message):
             last_bid = time.time()
 
             text = 'Registered bid for ' + current_auction['name'] + ' from: "' + bidder + '", Bid: ' + str(bid_amount) + 'g'
+            if previous_bidder:
+                text += '\n' + previous_bidder + ' has been outbid!'
             announce()
     logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
@@ -392,7 +396,7 @@ def won_auction():
     text = '[[ ' + bot_name + ' ]]\n'
     text += 'SOLD! Auction: ' + current_auction['name'] + '\n'
     text += 'High bidder: ' + highest_bidder + '\n'
-    text += 'Closing bid: ' + str(current_bid) + 'g\n'
+    text += 'Closing bid: ' + str(current_bid) + 'g'
 
     logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
@@ -418,7 +422,7 @@ def resume_auction():
         text = '[[ ' + bot_name + ' ]]\n'
         text += 'Resuming! Auction: ' + current_auction['name'] + '\n'
         text += 'High bidder: ' + highest_bidder + '\n'
-        text += 'Current bid: ' + str(current_bid) + 'g\n'
+        text += 'Current bid: ' + str(current_bid) + 'g'
 
         logging.info(text + ', card id: ' + str(current_auction['id']))
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
@@ -448,7 +452,7 @@ def complete_auction():
     text = '[[ ' + bot_name + ' ]]\n'
     text += 'COMPLETED TRADE! Auction: ' + current_auction['name'] + '\n'
     text += 'High bidder: ' + highest_bidder + '\n'
-    text += 'Closing bid: ' + str(current_bid) + 'g\n'
+    text += 'Closing bid: ' + str(current_bid) + 'g'
 
     logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
@@ -523,7 +527,7 @@ def trade_invite_response(message):
         ban(highest_bidder)
         text = '[[ ' + bot_name + ' ]]\n'
         text += 'DECLINED TRADE! Auction: ' + current_auction['name'] + '\n'
-        text += 'Banned: ' + highest_bidder + '\n'
+        text += 'Banned: ' + highest_bidder
 
         logging.info('Trade was declined by ' + highest_bidder + ', card id: ' + str(current_auction['id']))
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
@@ -656,6 +660,7 @@ def announce():
     """
     global current_auction
     global current_bid
+    global starting_bid
     global highest_bidder
 
     text = '[[ ' + bot_name + ' ]]\n'
@@ -665,7 +670,10 @@ def announce():
     else:
         text += 'No bids yet\n'
 
-    text += 'Current bid: ' + str(current_bid) + 'g\n'
+    if current_bid > 0:
+        text += 'Current bid: ' + str(current_bid) + 'g\n'
+    else:
+        text += 'Starting bid: ' + str(starting_bid) + 'g\n'
     text += '-----\n'
     text += 'Send !help for commands'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
@@ -690,6 +698,9 @@ def restock_items(message):
     global card_list
     for card in message['cards']:
         card_type = card_list[card['typeId']]
+        if card_type['rarity'] > 0:
+            text = 'Stocked: ' + card_type['name']
+            scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
         logging.info('Stocked: ' + card_type['name'] + ', card id: ' + str(card['id']))
 
 
