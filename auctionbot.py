@@ -29,7 +29,7 @@ class AuctionThread(threading.Thread):
 
             # new auction
             time.sleep(10)
-            unban()
+            unban_all()
 
             restocking = True
             while restocking:
@@ -54,8 +54,15 @@ class AuctionThread(threading.Thread):
             # auction_start_timer = 10
             # auction_start_sleep = 5
 
+            # test values
             # auction_end_threshold_1 = 30  # 2m
             # auction_bid_threshold_1 = 10  # 1m
+            # auction_end_threshold_2 = 60  # 4m
+            # auction_bid_threshold_2 = 8  # 30s
+            # auction_end_threshold_3 = 120  # 6m
+            # auction_bid_threshold_3 = 5  # 15s
+
+            # real values
             auction_end_threshold_1 = 120  # 2m
             auction_bid_threshold_1 = 60  # 1m
             auction_end_threshold_2 = 240  # 4m
@@ -65,8 +72,8 @@ class AuctionThread(threading.Thread):
             auction_end_warn = False
             auction_end_warn_time = 0
 
-            # auction_cancel_threshold = 30  # 3m
-            # auction_cancel_warn_threshold = 10  # 2m30s
+            # auction_cancel_threshold = 60  # 3m
+            # auction_cancel_warn_threshold = 20  # 2m30s
             auction_cancel_threshold = 180  # 3m
             auction_cancel_warn_threshold = 150  # 2m30s
             auction_cancel_warn = False
@@ -92,55 +99,55 @@ class AuctionThread(threading.Thread):
                 # if we have at least one bid
                 if last_bid:
                     # threshold 3 (6m)
-                    if now - auction_start > auction_end_threshold_3:
+                    if (now - auction_start) >= auction_end_threshold_3:
                         # auction has ended
-                        if now - last_bid > auction_end_threshold_3:
+                        if auction_end_warn and (now - auction_end_warn_time) > auction_end_threshold_3:
                             won_auction()
                             if completed_auction_status():
                                 break
                             else:
                                 continue
                         # warn the auction will end soon
-                        if now - last_bid >= auction_bid_threshold_3 and auction_end_warn is False:
+                        if (now - last_bid) >= auction_bid_threshold_3 and auction_end_warn is False:
                             auction_end_warn = True
-                            auction_end_warn_time = last_bid
+                            auction_end_warn_time = time.time()
                             auction_end_countdown(auction_bid_threshold_3)
                     # threshold 2 (4m)
-                    elif now - auction_start > auction_end_threshold_2:
+                    elif (now - auction_start) >= auction_end_threshold_2:
                         # auction has ended
-                        if now - last_bid > auction_end_threshold_2:
+                        if auction_end_warn and (now - auction_end_warn_time) > auction_bid_threshold_2:
                             won_auction()
                             if completed_auction_status():
                                 break
                             else:
                                 continue
                         # warn the auction will end soon
-                        if now - last_bid >= auction_bid_threshold_2 and auction_end_warn is False:
+                        if (now - last_bid) >= auction_bid_threshold_2 and auction_end_warn is False:
                             auction_end_warn = True
-                            auction_end_warn_time = last_bid
+                            auction_end_warn_time = time.time()
                             auction_end_countdown(auction_bid_threshold_2)
                     # threshold 1 (2m)
-                    elif now - auction_start > auction_end_threshold_1:
+                    elif (now - auction_start) >= auction_end_threshold_1:
                         # auction has ended
-                        if now - last_bid > auction_end_threshold_1:
+                        if auction_end_warn and (now - auction_end_warn_time) > auction_bid_threshold_1:
                             won_auction()
                             if completed_auction_status():
                                 break
                             else:
                                 continue
                         # warn the auction will end soon
-                        if now - last_bid >= auction_bid_threshold_1 and auction_end_warn is False:
+                        if (now - last_bid) >= auction_bid_threshold_1 and auction_end_warn is False:
                             auction_end_warn = True
-                            auction_end_warn_time = last_bid
+                            auction_end_warn_time = time.time()
                             auction_end_countdown(auction_bid_threshold_1)
 
                 else:
                     # no bids, cancel
-                    if now - auction_start >= auction_cancel_threshold:
+                    if (now - auction_start) >= auction_cancel_threshold:
                         cancel_auction()
                         break
                     # warn the auction will be cancelled
-                    if now - auction_start >= auction_cancel_warn_threshold and auction_cancel_warn is False:
+                    if (now - auction_start) >= auction_cancel_warn_threshold and auction_cancel_warn is False:
                         auction_cancel_warn = True
                         auction_cancel_countdown(auction_cancel_threshold - auction_cancel_warn_threshold)
 
@@ -164,6 +171,7 @@ global bot_profile
 global restocking
 global requested
 global requesters
+global lock
 
 email = 'scrolls.auctionbot@gmail.com'
 password = '98*psq2K&t7MPv72$@&FJe7z'
@@ -172,10 +180,13 @@ bot_name = 'AuctionBot v0.1a'
 bot_user = 'AuctionBot'
 bot_profile = None
 
+admins = ['detour_', 'aTidwell']
+
 bid_cmd = '!bid'
 help_cmd = '!help'
 announce_cmd = '!announce'
 request_cmd = '!request'
+unban_cmd = '!unban'
 
 room = 'auction'
 profiles = {}
@@ -201,6 +212,7 @@ requested = {}
 requesters = {}
 
 auction_thread = AuctionThread()
+lock = threading.Lock()
 
 
 ###
@@ -269,6 +281,11 @@ def room_chat(message):
     if 'text' in message and message['from'] == bot_user:
         return
 
+    # handle admin commands
+    if 'from' in message and message['from'] in admins:
+        if 'text' in message and unban_cmd in message['text']:
+            unban_bidder(message)
+
     # handle !bid
     if 'text' in message and bid_cmd in message['text']:
         process_bid(message)
@@ -286,6 +303,8 @@ def room_chat(message):
     if 'text' in message and help_cmd == message['text']:
         help()
 
+    time.sleep(1)
+
 
 def room_enter(message):
     """
@@ -301,6 +320,7 @@ def room_enter(message):
 
 
 def restock():
+    lock.acquire()
     global bot_profile
     global restocking
 
@@ -322,12 +342,14 @@ def restock():
     else:
         scrolls.unsubscribe('BuyStoreItemResponse')
         restocking = False
+    lock.release()
 
 
 def process_bid(message):
     """
     Validate and register bids
     """
+    lock.acquire()
     global current_auction
     global starting_bid
     global current_bid
@@ -344,7 +366,7 @@ def process_bid(message):
     bid = message['text'].split(bid_cmd)[1].strip()
     bid_re = re.match('^((\d+)\s?g?){1}', bid)
 
-    if not live:
+    if not live or not current_auction:
         text = bidder + ', No auctions are currently active.'
     elif bidder in banned:
         text = 'Invalid bid from: "' + bidder + '", you are banned.'
@@ -377,11 +399,16 @@ def process_bid(message):
             if previous_bidder:
                 text += '\n' + previous_bidder + ' has been outbid!'
             announce()
-    logging.info(text + ', card id: ' + str(current_auction['id']))
+    if current_auction and 'id' in current_auction:
+        logging.info(text + ', card id: ' + str(current_auction['id']))
+    else:
+        logging.info(text)
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+    lock.release()
 
 
 def won_auction():
+    lock.acquire()
     global current_auction
     global current_bid
     global highest_bidder
@@ -402,9 +429,11 @@ def won_auction():
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
     send_trade_invite(user)
+    lock.release()
 
 
 def resume_auction():
+    lock.acquire()
     global current_auction
     global current_bid
     global highest_bidder
@@ -435,11 +464,14 @@ def resume_auction():
 
         # signal auction thread that we need to continue
         completed_auction = False
+        lock.release()
     else:
+        lock.release()
         cancel_auction()
 
 
 def complete_auction():
+    lock.acquire()
     global current_auction
     global current_bid
     global highest_bidder
@@ -467,9 +499,11 @@ def complete_auction():
 
     # signal auction thread that we finished
     completed_auction = True
+    lock.release()
 
 
 def cancel_auction():
+    lock.acquire()
     global current_auction
     global highest_bidder
     global auction_end
@@ -500,6 +534,7 @@ def cancel_auction():
 
     # signal auction thread that we finished
     completed_auction = True
+    lock.release()
 
 
 def send_trade_invite(user):
@@ -607,6 +642,7 @@ def out_of_stock():
 
 
 def request(message):
+    lock.acquire()
     """
     Respond to the !request command
     """
@@ -652,6 +688,7 @@ def request(message):
             text += ' requested ' + str(requested[scroll_name]) + ' times'
 
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+    lock.release()
 
 
 def announce():
@@ -693,6 +730,12 @@ def help():
 ###
 ### ONE-OFF RESPONSES
 ###
+
+
+def unban_bidder(message):
+    bidder = message['text'].split(unban_cmd)[1].strip()
+    unban(bidder)
+
 
 def restock_items(message):
     global card_list
@@ -786,6 +829,7 @@ def populate_catalog():
     """
     Fetches the latest prices from scrollspost and populates our catalog of rares and uncommons
     """
+    lock.acquire()
     global library
     global catalog
     global card_list
@@ -820,6 +864,7 @@ def populate_catalog():
 
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
+    lock.release()
 
 
 def ban(bidder):
@@ -831,7 +876,16 @@ def ban(bidder):
     banned.update({bidder: time.time()})
 
 
-def unban():
+def unban(bidder):
+    global banned
+    if bidder in banned:
+        banned.pop(bidder)
+        text = 'Unbanned: ' + bidder
+        logging.info(text)
+        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
+
+def unban_all():
     """
     unban users who have served their time
     """
