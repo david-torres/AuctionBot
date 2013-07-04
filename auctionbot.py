@@ -276,6 +276,8 @@ def room_enter(message):
         text = bot_name + ' is activated.'
         logging.info(text)
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+    else:
+        bid_reminder(message['roomName'])
 
 
 def process_bid(message):
@@ -485,7 +487,6 @@ def trade_invite_response(message):
 
 
 def trade_view_response(message):
-    global complete_auction_threshold
     global current_bid
     global auction_end
 
@@ -591,6 +592,14 @@ def help():
 ###
 ### ONE-OFF RESPONSES
 ###
+
+def bid_reminder(trade_room):
+    global current_bid
+    global current_auction
+    text = 'You bid ' + str(current_bid) + 'g for ' + current_auction['name'] + '\n'
+    text += 'Please enter the correct amount and press Accept to complete the trade.'
+    logging.info(text + ', card id: ' + str(current_auction['id']))
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': trade_room, 'text': text})
 
 
 def card_types(message):
