@@ -40,7 +40,7 @@ class AuctionThread(threading.Thread):
                 out_of_stock()
                 break
 
-            current_auction = catalog.pop(0)
+            current_auction = select_from_catalog()
             logging.info('Starting auction for ' + current_auction['name'] + ', card id: ' + str(current_auction['id']))
             starting_bid = current_auction['starting_bid']
             current_bid = current_auction['starting_bid']
@@ -49,15 +49,15 @@ class AuctionThread(threading.Thread):
             completed_auction = None
 
             auction_start = time.time()
-            # auction_start_timer = 60
-            # auction_start_sleep = 20
-            auction_start_timer = 10
-            auction_start_sleep = 5
+            auction_start_timer = 60
+            auction_start_sleep = 20
+            # auction_start_timer = 10
+            # auction_start_sleep = 5
 
-            auction_end_threshold_1 = 30  # 2m
-            auction_bid_threshold_1 = 10  # 1m
-            # auction_end_threshold_1 = 120  # 2m
-            # auction_bid_threshold_1 = 60  # 1m
+            # auction_end_threshold_1 = 30  # 2m
+            # auction_bid_threshold_1 = 10  # 1m
+            auction_end_threshold_1 = 120  # 2m
+            auction_bid_threshold_1 = 60  # 1m
             auction_end_threshold_2 = 240  # 4m
             auction_bid_threshold_2 = 30  # 30s
             auction_end_threshold_3 = 360  # 6m
@@ -65,10 +65,10 @@ class AuctionThread(threading.Thread):
             auction_end_warn = False
             auction_end_warn_time = 0
 
-            auction_cancel_threshold = 30  # 3m
-            auction_cancel_warn_threshold = 10  # 2m30s
-            # auction_cancel_threshold = 180  # 3m
-            # auction_cancel_warn_threshold = 150  # 2m30s
+            # auction_cancel_threshold = 30  # 3m
+            # auction_cancel_warn_threshold = 10  # 2m30s
+            auction_cancel_threshold = 180  # 3m
+            auction_cancel_warn_threshold = 150  # 2m30s
             auction_cancel_warn = False
 
             # start the countdown timer
@@ -162,6 +162,8 @@ global previous_bidder
 global completed_auction
 global bot_profile
 global restocking
+global requested
+global requesters
 
 email = 'scrolls.auctionbot@gmail.com'
 password = '98*psq2K&t7MPv72$@&FJe7z'
@@ -170,9 +172,10 @@ bot_name = 'AuctionBot v0.1a'
 bot_user = 'AuctionBot'
 bot_profile = None
 
-announce_cmd = '!announce'
 bid_cmd = '!bid'
 help_cmd = '!help'
+announce_cmd = '!announce'
+request_cmd = '!request'
 
 room = 'auction'
 profiles = {}
@@ -194,6 +197,8 @@ ban_threshold = 3600
 auction_end = None
 completed_auction = None
 restocking = False
+requested = {}
+requesters = {}
 
 auction_thread = AuctionThread()
 
@@ -203,9 +208,8 @@ auction_thread = AuctionThread()
 ###
 
 def run(message):
-    global current_auction
-
     """ This function is executed upon receiving the 'SignIn' event """
+    global current_auction
 
     # get the bot's profile data
     scrolls.subscribe('ProfileDataInfo', bot_profile_data)
@@ -268,6 +272,10 @@ def room_chat(message):
     # handle !bid
     if 'text' in message and bid_cmd in message['text']:
         process_bid(message)
+
+    # handle !request
+    if 'text' in message and request_cmd in message['text']:
+        request(message)
 
     # handle !announce
     if 'text' in message and announce_cmd == message['text']:
@@ -594,6 +602,54 @@ def out_of_stock():
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
+def request(message):
+    """
+    Respond to the !request command
+    """
+    global requested
+    global requesters
+    global card_list
+    global catalog
+
+    requester = message['from']
+    requested_scroll = message['text'].split(request_cmd)[1].strip()
+
+    scroll_exists = False
+    scroll_name = None
+    for card_id, card_type in card_list.iteritems():
+        if card_type['name'].lower() == requested_scroll.lower():
+            scroll_name = card_type['name']
+            scroll_exists = True
+            break
+
+    if not scroll_exists:
+        text = 'Invalid request from ' + requester + '. No scroll named ' + requested_scroll
+    else:
+        scroll_found_in_catalog = False
+        for item in catalog:
+            if item['name'] == scroll_name:
+                scroll_found_in_catalog = True
+                break
+
+        if not scroll_found_in_catalog:
+            text = 'Sorry ' + requester + '. ' + scroll_name + ' is out of stock.'
+        else:
+            if requester in requesters.keys():
+                previous_request = requesters[requester]
+                requested[previous_request] -= 1
+
+            requesters[requester] = scroll_name
+            if scroll_name in requested.keys():
+                requested[scroll_name] += 1
+            else:
+                requested[scroll_name] = 1
+
+            text = 'Registered request from ' + requester + '. ' + scroll_name
+            text += ' requested ' + str(requested[scroll_name]) + ' times'
+
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
+
 def announce():
     """
     Respond to the !announce command
@@ -620,8 +676,9 @@ def help():
     Respond to the !help command
     """
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'Send !bid ###g to bid on the current auction\n'
-    text += 'Send !announce to see the current auction, high bidder, and current bid'
+    text += 'Send " !bid ###g " to bid on the current auction\n'
+    text += 'Send " !request scroll_name " to request a specific scroll\n'
+    text += 'Send " !announce " to see the current auction, high bidder, and current bid'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
@@ -683,6 +740,36 @@ def bot_profile_data(message):
 ### UTIL METHODS
 ###
 
+def notify_requesters(requested_scroll):
+    global requesters
+
+    requesters_str = ', '.join([requestee for requestee, scroll in requesters.iteritems() if scroll == requested_scroll])
+    for requestee in dict(requesters).keys():
+        requesters.pop(requestee)
+
+    text = 'Notification: ' + requesters_str + '\n' + requested_scroll + ' is up for auction.'
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
+
+def select_from_catalog():
+    global catalog
+    global requested
+
+    highest_rank = 0
+    top_request = None
+    for requested_scroll, num_requests in requested.iteritems():
+        if num_requests > highest_rank:
+            top_request = requested_scroll
+
+    if top_request:
+        for catalog_index, catalog_item in enumerate(catalog):
+            if catalog_item['name'] == top_request:
+                requested.pop(top_request)
+                notify_requesters(top_request)
+                return catalog.pop(catalog_index)
+    else:
+        return catalog.pop(0)
+
 
 def populate_catalog():
     """
@@ -712,6 +799,7 @@ def populate_catalog():
                         buy = price['price']['buy']
                         suggested = price['price']['suggested']
                         starting_bid = buy if buy > 0 else suggested
+
                         auction_item = {
                             'id': library_item['id'],
                             'name': card_type['name'],
