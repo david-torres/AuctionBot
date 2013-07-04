@@ -21,6 +21,7 @@ class AuctionThread(threading.Thread):
         global auction_end
         global last_bid
         global completed_auction
+        global restocking
 
         while True:
             if current_auction:
@@ -29,6 +30,10 @@ class AuctionThread(threading.Thread):
             # new auction
             time.sleep(10)
             unban()
+
+            restocking = True
+            while restocking:
+                restock()
 
             # out of stock
             if len(catalog) <= 0:
@@ -155,6 +160,8 @@ global profiles
 global previous_bid
 global previous_bidder
 global completed_auction
+global bot_profile
+global restocking
 
 email = 'scrolls.auctionbot@gmail.com'
 password = '98*psq2K&t7MPv72$@&FJe7z'
@@ -186,6 +193,7 @@ complete_auction_threshold = 60
 ban_threshold = 3600
 auction_end = None
 completed_auction = None
+restocking = False
 
 auction_thread = AuctionThread()
 
@@ -198,6 +206,10 @@ def run(message):
     global current_auction
 
     """ This function is executed upon receiving the 'SignIn' event """
+
+    # get the bot's profile data
+    scrolls.subscribe('ProfileDataInfo', bot_profile_data)
+    scrolls.send({'msg': 'ProfileDataInfo'})
 
     # populate the current list of scrolls
     scrolls.subscribe('CardTypes', card_types)
@@ -278,6 +290,30 @@ def room_enter(message):
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     else:
         bid_reminder(message['roomName'])
+
+
+def restock():
+    global bot_profile
+    global restocking
+
+    pack_price = 1000
+    pack_item_id = 180
+    single_price = 100
+    single_item_id = 137
+
+    scrolls.subscribe('BuyStoreItemResponse', restock_items)
+
+    if bot_profile['gold'] >= pack_price:
+        scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
+        scrolls.send({'msg': 'ProfileDataInfo'})
+        time.sleep(1)
+    elif bot_profile['gold'] >= single_price:
+        scrolls.send({'itemId': single_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
+        scrolls.send({'msg': 'ProfileDataInfo'})
+        time.sleep(1)
+    else:
+        scrolls.unsubscribe('BuyStoreItemResponse')
+        restocking = False
 
 
 def process_bid(message):
@@ -593,6 +629,13 @@ def help():
 ### ONE-OFF RESPONSES
 ###
 
+def restock_items(message):
+    global card_list
+    for card in message['cards']:
+        card_type = card_list[card['typeId']]
+        logging.info('Stocked: ' + card_type['name'] + ', card id: ' + str(card['id']))
+
+
 def bid_reminder(trade_room):
     global current_bid
     global current_auction
@@ -626,6 +669,14 @@ def bot_profile_info(message):
     """
     global bot_profile
     bot_profile = message['profile']
+
+
+def bot_profile_data(message):
+    """
+    Retrieve's the bot's data
+    """
+    global bot_profile
+    bot_profile.update(message['profileData'])
 
 
 ###
