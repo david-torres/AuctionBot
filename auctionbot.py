@@ -22,7 +22,7 @@ class AuctionThread(threading.Thread):
         global last_bid
         global completed_auction
 
-        while (1):
+        while True:
             if current_auction:
                 continue
 
@@ -36,23 +36,23 @@ class AuctionThread(threading.Thread):
                 break
 
             current_auction = catalog.pop(0)
-            logging.info('Starting auction for ' + current_auction[0])
-            starting_bid = current_auction[1]
-            current_bid = current_auction[1]
+            logging.info('Starting auction for ' + current_auction['name'] + ', card id: ' + str(current_auction['id']))
+            starting_bid = current_auction['starting_bid']
+            current_bid = current_auction['starting_bid']
             last_bid = None
             live = False
             completed_auction = None
 
             auction_start = time.time()
-            auction_start_timer = 60
-            auction_start_sleep = 20
-            # auction_start_timer = 10
-            # auction_start_sleep = 5
+            # auction_start_timer = 60
+            # auction_start_sleep = 20
+            auction_start_timer = 10
+            auction_start_sleep = 5
 
-            # auction_end_threshold_1 = 30  # 2m
-            # auction_bid_threshold_1 = 10  # 1m
-            auction_end_threshold_1 = 120  # 2m
-            auction_bid_threshold_1 = 60  # 1m
+            auction_end_threshold_1 = 30  # 2m
+            auction_bid_threshold_1 = 10  # 1m
+            # auction_end_threshold_1 = 120  # 2m
+            # auction_bid_threshold_1 = 60  # 1m
             auction_end_threshold_2 = 240  # 4m
             auction_bid_threshold_2 = 30  # 30s
             auction_end_threshold_3 = 360  # 6m
@@ -60,10 +60,10 @@ class AuctionThread(threading.Thread):
             auction_end_warn = False
             auction_end_warn_time = 0
 
-            # auction_cancel_threshold = 30  # 3m
-            # auction_cancel_warn_threshold = 10  # 2m30s
-            auction_cancel_threshold = 180  # 3m
-            auction_cancel_warn_threshold = 150  # 2m30s
+            auction_cancel_threshold = 30  # 3m
+            auction_cancel_warn_threshold = 10  # 2m30s
+            # auction_cancel_threshold = 180  # 3m
+            # auction_cancel_warn_threshold = 150  # 2m30s
             auction_cancel_warn = False
 
             # start the countdown timer
@@ -76,7 +76,7 @@ class AuctionThread(threading.Thread):
 
             # announce live auction
             announce()
-            while (1):
+            while True:
                 now = time.time()
 
                 # we have a fresh bid, reset auction ending soon warning
@@ -148,7 +148,7 @@ global auction_start
 global auction_end
 global last_bid
 global live
-global all_scrolls
+global card_list
 global library
 global banned
 global profiles
@@ -168,8 +168,11 @@ bid_cmd = '!bid'
 help_cmd = '!help'
 
 room = 'auction'
-profiles = []
-catalog = []
+profiles = {}
+catalog = {}
+card_list = {}
+library = {}
+banned = {}
 current_auction = None
 starting_bid = None
 current_bid = None
@@ -179,12 +182,9 @@ previous_bidder = None
 live = False
 max_bid = 5000
 last_bid = None
-all_scrolls = None
-library = None
 complete_auction_threshold = 60
 ban_threshold = 3600
 auction_end = None
-banned = {}
 completed_auction = None
 
 auction_thread = AuctionThread()
@@ -230,8 +230,10 @@ def room_info(message):
     global live
     global profiles
 
-    profiles.extend([profile for profile in message['profiles'] if not profile in profiles])
-    logging.info('Updated user list. ' + ', '.join([p['name'] for p in profiles]))
+    for new_profile in message['profiles']:
+        if not new_profile in profiles.keys():
+            profiles[new_profile['name']] = new_profile
+    logging.info('Updated user list. ' + ', '.join([name for name in profiles.keys()]))
 
     if live:
         announce()
@@ -289,9 +291,10 @@ def process_bid(message):
     global banned
     global previous_bidder
     global previous_bid
+    global profiles
 
     bidder = message['from']
-    user = get_user(bidder)
+    user = profiles[bidder]
     bid = message['text'].split(bid_cmd)[1].strip()
     bid_re = re.match('^((\d+)\s?g?){1}', bid)
 
@@ -322,9 +325,9 @@ def process_bid(message):
             highest_bidder = bidder
             last_bid = time.time()
 
-            text = 'Registered bid from: "' + bidder + '", Bid: ' + str(bid_amount) + 'g'
+            text = 'Registered bid for ' + current_auction['name'] + ' from: "' + bidder + '", Bid: ' + str(bid_amount) + 'g'
             announce()
-    logging.info(text + ' for ' + current_auction[0])
+    logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
@@ -337,15 +340,15 @@ def won_auction():
     global live
 
     live = False
-    user = get_user(highest_bidder)
+    user = profiles[highest_bidder]
     auction_end = time.time()
 
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'SOLD! Auction: ' + current_auction[0] + '\n'
+    text += 'SOLD! Auction: ' + current_auction['name'] + '\n'
     text += 'High bidder: ' + highest_bidder + '\n'
     text += 'Closing bid: ' + str(current_bid) + 'g\n'
 
-    logging.info(text)
+    logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
     send_trade_invite(user)
@@ -367,11 +370,11 @@ def resume_auction():
 
     if previous_bidder:
         text = '[[ ' + bot_name + ' ]]\n'
-        text += 'Resuming! Auction: ' + current_auction[0] + '\n'
+        text += 'Resuming! Auction: ' + current_auction['name'] + '\n'
         text += 'High bidder: ' + highest_bidder + '\n'
         text += 'Current bid: ' + str(current_bid) + 'g\n'
 
-        logging.info(text)
+        logging.info(text + ', card id: ' + str(current_auction['id']))
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
         auction_end = None
@@ -397,11 +400,11 @@ def complete_auction():
     global completed_auction
 
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'COMPLETED TRADE! Auction: ' + current_auction[0] + '\n'
+    text += 'COMPLETED TRADE! Auction: ' + current_auction['name'] + '\n'
     text += 'High bidder: ' + highest_bidder + '\n'
     text += 'Closing bid: ' + str(current_bid) + 'g\n'
 
-    logging.info(text)
+    logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
     current_auction = None
@@ -432,7 +435,7 @@ def cancel_auction():
     catalog.append(current_auction)
 
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'Cancelled auction: ' + current_auction[0]
+    text += 'Cancelled auction: ' + current_auction['name']
 
     logging.info(text)
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
@@ -451,7 +454,7 @@ def cancel_auction():
 
 def send_trade_invite(user):
     scrolls.subscribe('TradeResponse', trade_invite_response)
-    logging.info('Sent trade invite to: ' + user['name'])
+    logging.info('Sent trade invite to: ' + user['name'] + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'TradeInvite', 'profile': user['id']})
 
 
@@ -466,19 +469,17 @@ def trade_invite_response(message):
     if message['status'] == 'ACCEPT':
         # add the card to the trade
         scrolls.subscribe('TradeView', trade_view_response)
-        card = find_scroll_in_library(current_auction[0])
-        card_id = int(card['id'])
 
-        logging.info('Adding card to trade: ' + current_auction[0] + ', card id: ' + str(card_id))
-        scrolls.send({'msg': 'TradeAddCards', 'cardIds': [card_id]})
+        logging.info('Adding card to trade: ' + current_auction['name'] + ', card id: ' + str(current_auction['id']))
+        scrolls.send({'msg': 'TradeAddCards', 'cardIds': [current_auction['id']]})
     else:
         # bidder declinded the trade invite, BAN!
         ban(highest_bidder)
         text = '[[ ' + bot_name + ' ]]\n'
-        text += 'DECLINED TRADE! Auction: ' + current_auction[0] + '\n'
+        text += 'DECLINED TRADE! Auction: ' + current_auction['name'] + '\n'
         text += 'Banned: ' + highest_bidder + '\n'
 
-        logging.info('Trade was declined by ' + highest_bidder)
+        logging.info('Trade was declined by ' + highest_bidder + ', card id: ' + str(current_auction['id']))
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
         resume_auction()
 
@@ -493,7 +494,7 @@ def trade_view_response(message):
 
     # bidder has accepted and traded the correct amount of gold
     if message['to']['accepted'] and message['to']['gold'] == current_bid:
-        logging.info('Accepted trade with ' + message['to']['profile']['name'])
+        logging.info('Accepted trade with ' + message['to']['profile']['name'] + ', card id: ' + str(current_auction['id']))
         logging.info('Gold: ' + str(message['to']['gold']))
         scrolls.send({'msg': 'TradeAcceptBargain'})
         scrolls.unsubscribe('TradeView')
@@ -501,12 +502,12 @@ def trade_view_response(message):
     else:
         # bidder takes too long to finish the trade, cancel
         if time.time() - auction_end > complete_auction_threshold:
-            logging.info('Cancelled trade with ' + message['to']['profile']['name'])
+            logging.info('Cancelled trade with ' + message['to']['profile']['name'] + ', card id: ' + str(current_auction['id']))
             scrolls.unsubscribe('TradeResponse')
             scrolls.send({'msg': 'TradeCancel'})
             ban(highest_bidder)
             text = '[[ ' + bot_name + ' ]]\n'
-            text += 'FAILED TRADE! Auction: ' + current_auction[0] + '\n'
+            text += 'FAILED TRADE! Auction: ' + current_auction['name'] + '\n'
             text += 'Banned: ' + highest_bidder + '\n'
             scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
             resume_auction()
@@ -519,7 +520,7 @@ def auction_start_countdown(countdown_time):
     global current_auction
 
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'Next auction: ' + current_auction[0] + '\n'
+    text += 'Next auction: ' + current_auction['name'] + '\n'
     text += 'Starting in ' + str(countdown_time) + ' seconds\n'
     text += '-----\n'
     text += 'Send !help for commands'
@@ -532,7 +533,7 @@ def auction_end_countdown(ending_in):
     global highest_bidder
 
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'Ending soon! Auction: ' + current_auction[0] + '\n'
+    text += 'Ending soon! Auction: ' + current_auction['name'] + '\n'
     text += 'High bidder: ' + highest_bidder + '\n'
     text += 'Current bid: ' + str(current_bid) + 'g\n'
     text += 'Ending in ' + str(ending_in) + ' seconds'
@@ -542,7 +543,7 @@ def auction_end_countdown(ending_in):
 def auction_cancel_countdown(ending_in):
     global current_auction
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'Warning! Auction: ' + current_auction[0] + '\n'
+    text += 'Warning! Auction: ' + current_auction['name'] + '\n'
     text += 'Ending in ' + str(ending_in) + ' seconds'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
@@ -565,7 +566,7 @@ def announce():
     global highest_bidder
 
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'Current auction: ' + current_auction[0] + '.\n'
+    text += 'Current auction: ' + current_auction['name'] + '.\n'
     if highest_bidder:
         text += 'High bidder: ' + highest_bidder + '\n'
     else:
@@ -596,8 +597,9 @@ def card_types(message):
     """
     Save the current master list of cards
     """
-    global all_scrolls
-    all_scrolls = message['cardTypes']
+    global card_list
+    for card in message['cardTypes']:
+        card_list[card['id']] = card
 
 
 def library(message):
@@ -628,6 +630,7 @@ def populate_catalog():
     """
     global library
     global catalog
+    global card_list
 
     prices_r = requests.get('http://api.scrollspost.com/v1/prices/1-day')
     prices = prices_r.json()
@@ -636,51 +639,28 @@ def populate_catalog():
         catalog = []
         for library_item in library:
             if library_item['tradable']:
-                card = get_card(library_item['typeId'])
 
-                if card['rarity'] == 0:
+                # check rarity of the base card
+                card_type = card_list[library_item['typeId']]
+                if card_type['rarity'] == 0:
                     # skip commons
                     continue
-                for price_item in prices:
-                    if price_item['card_id'] == card['id']:
-                        buy = price_item['price']['buy']
-                        suggested = price_item['price']['suggested']
+
+                # pricing
+                for price in prices:
+                    if price['card_id'] == library_item['typeId']:
+                        buy = price['price']['buy']
+                        suggested = price['price']['suggested']
                         starting_bid = buy if buy > 0 else suggested
-                        auction_item = (price_item['name'], starting_bid)
+                        auction_item = {
+                            'id': library_item['id'],
+                            'name': card_type['name'],
+                            'starting_bid': starting_bid
+                        }
                         catalog.append(auction_item)
 
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
-
-
-def find_scroll_in_library(name):
-    global all_scrolls
-    global library
-    for card_type in all_scrolls:
-        if card_type['name'] == name:
-            for library_item in library:
-                if card_type['id'] == library_item['typeId'] and library_item['tradable']:
-                    return library_item
-
-
-def get_user(name):
-    """
-    retrieves a user's profile object by name
-    """
-    global profiles
-    for user in profiles:
-        if user['name'] == name:
-            return user
-
-
-def get_card(type_id):
-    """
-    retrieves a scroll object by type id
-    """
-    global all_scrolls
-    for scroll in all_scrolls:
-        if scroll['id'] == type_id:
-            return scroll
 
 
 def ban(bidder):
@@ -708,10 +688,10 @@ def completed_auction_status():
     """
     The purpose of this function is to block the
     main auction loop until we are certain an auction
-    has been completed or not
+    has been completed or not (happens async)
     """
     global completed_auction
-    while (1):
+    while True:
         if completed_auction is True:
             completed_auction = None
             return True
