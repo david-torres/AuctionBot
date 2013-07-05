@@ -49,8 +49,8 @@ class AuctionThread(threading.Thread):
             completed_auction = None
 
             auction_start = time.time()
-            auction_start_timer = 60
-            auction_start_sleep = 20
+            auction_start_timer = 20
+            auction_start_sleep = 10
             # auction_start_timer = 10
             # auction_start_sleep = 5
 
@@ -845,6 +845,7 @@ def notify_requesters(requested_scroll):
     for requestee in dict(requesters).keys():
         requesters.pop(requestee)
 
+    logging.info('notifying ' + requesters_str + ' ' requested_scroll + ' is up for auction')
     text = 'Notification: ' + requesters_str + '\n' + requested_scroll + ' is up for auction.'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
