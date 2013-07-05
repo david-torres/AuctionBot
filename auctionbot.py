@@ -319,13 +319,14 @@ def room_enter(message):
 
 
 def process_profiles(message):
+    lock.acquire()
     global profiles
     global profiles_last_seen
 
     new_profiles = message['profiles']
-    new_profiles_names = [p['name'] for p in new_profiles]
-
     if new_profiles:
+        new_profiles_names = [p['name'] for p in new_profiles]
+
         for new_profile in new_profiles:
             if not new_profile in profiles.keys():
                 profiles[new_profile['name']] = new_profile
@@ -346,6 +347,7 @@ def process_profiles(message):
                     del profiles[name]
 
         logging.info('Updated user list. ' + ', '.join([name for name in profiles.keys()]))
+    lock.release()
 
 
 def restock():
