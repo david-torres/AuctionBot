@@ -164,6 +164,7 @@ global card_list
 global library
 global banned
 global profiles
+global profiles_last_seen
 global previous_bid
 global previous_bidder
 global completed_auction
@@ -190,6 +191,7 @@ unban_cmd = '!unban'
 
 room = 'auction'
 profiles = {}
+profiles_last_seen = {}
 catalog = {}
 card_list = {}
 library = {}
@@ -258,10 +260,7 @@ def room_info(message):
     global live
     global profiles
 
-    for new_profile in message['profiles']:
-        if not new_profile in profiles.keys():
-            profiles[new_profile['name']] = new_profile
-    logging.info('Updated user list. ' + ', '.join([name for name in profiles.keys()]))
+    process_profiles(message)
 
     if live:
         announce()
@@ -317,6 +316,36 @@ def room_enter(message):
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     else:
         bid_reminder(message['roomName'])
+
+
+def process_profiles(message):
+    global profiles
+    global profiles_last_seen
+
+    new_profiles = message['profiles']
+    new_profiles_names = [p['name'] for p in new_profiles]
+
+    if new_profiles:
+        for new_profile in new_profiles:
+            if not new_profile in profiles.keys():
+                profiles[new_profile['name']] = new_profile
+
+        # remove timed out users and refresh timers on others
+        now = time.time()
+        timeout = 120  # timeout 2m
+
+        for name in profiles.keys():
+            if name in new_profiles_names:
+                profiles_last_seen[name] = now
+
+        profiles_last_seen_iter = dict(profiles_last_seen)
+        for name, last_seen in profiles_last_seen_iter.iteritems():
+            if not name in new_profiles_names:
+                if now > (last_seen + timeout):
+                    del profiles_last_seen[name]
+                    del profiles[name]
+
+        logging.info('Updated user list. ' + ', '.join([name for name in profiles.keys()]))
 
 
 def restock():
