@@ -180,6 +180,7 @@ password = '98*psq2K&t7MPv72$@&FJe7z'
 bot_name = 'AuctionBot v0.1a'
 bot_user = 'AuctionBot'
 bot_profile = None
+room = 'auction'
 
 admins = ['detour_', 'aTidwell']
 
@@ -189,7 +190,6 @@ announce_cmd = '!announce'
 request_cmd = '!request'
 unban_cmd = '!unban'
 
-room = 'auction'
 profiles = {}
 profiles_last_seen = {}
 catalog = {}
@@ -234,7 +234,7 @@ def run(message):
     scrolls.send({'msg': 'CardTypes'})
 
     # populate the library
-    scrolls.subscribe('LibraryView', library)
+    scrolls.subscribe('LibraryView', library_view)
     scrolls.send({'msg': 'LibraryView'})
 
     # subscribe to the RoomEnter event with function room_enter()
@@ -373,6 +373,7 @@ def restock():
     else:
         scrolls.unsubscribe('BuyStoreItemResponse')
         restocking = False
+
     lock.release()
 
 
@@ -519,6 +520,7 @@ def complete_auction():
 
     logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+    scrolls.send({'msg': 'LibraryView'})
 
     current_auction = None
     current_bid = None
@@ -601,10 +603,16 @@ def trade_invite_response(message):
 
 
 def trade_view_response(message):
+    global current_auction
     global current_bid
     global auction_end
 
     if not auction_end:
+        return
+
+    if 'cardIds' in message['from'] and len(message['from']['cardIds']) == 0:
+        logging.info('Card not added to trade' + ', card id: ' + current_auction['id'])
+        scrolls.send({'msg': 'TradeAddCards', 'cardIds': [current_auction['id']]})
         return
 
     # bidder has accepted and traded the correct amount of gold
@@ -775,6 +783,7 @@ def restock_items(message):
         if card_type['rarity'] > 0:
             text = 'Stocked: ' + card_type['name']
             scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+        scrolls.send('LibraryView', library_view)
         logging.info('Stocked: ' + card_type['name'] + ', card id: ' + str(card['id']))
 
 
@@ -796,13 +805,16 @@ def card_types(message):
         card_list[card['id']] = card
 
 
-def library(message):
+def library_view(message):
     """
     Save our current library
     """
     global library
-    library = message['cards']
-    populate_catalog()
+    global bot_profile
+
+    if message['profileId'] == bot_profile['id']:
+        library = message['cards']
+        populate_catalog()
 
 
 def bot_profile_info(message):
@@ -810,7 +822,8 @@ def bot_profile_info(message):
     Retrieve's the bot's own profile
     """
     global bot_profile
-    bot_profile = message['profile']
+    if 'profile' in message and 'name' in message['profile'] and message['profile']['name'] == bot_user:
+        bot_profile = message['profile']
 
 
 def bot_profile_data(message):
@@ -871,7 +884,7 @@ def populate_catalog():
     if prices:
         catalog = []
         for library_item in library:
-            if library_item['tradable']:
+            if library_item['tradable'] is True:
 
                 # check rarity of the base card
                 card_type = card_list[library_item['typeId']]
