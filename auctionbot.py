@@ -845,7 +845,7 @@ def notify_requesters(requested_scroll):
     for requestee in dict(requesters).keys():
         requesters.pop(requestee)
 
-    logging.info('notifying ' + requesters_str + ' ' requested_scroll + ' is up for auction')
+    logging.info('notifying ' + requesters_str + ' ' + requested_scroll + ' is up for auction')
     text = 'Notification: ' + requesters_str + '\n' + requested_scroll + ' is up for auction.'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
