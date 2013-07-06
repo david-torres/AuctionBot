@@ -800,6 +800,7 @@ def restock_items(message):
         if card_type['rarity'] > 0:
             text = 'Stocked: ' + card_type['name']
             scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+            time.sleep(1)
         scrolls.send({'msg': 'LibraryView'})
         logging.info('Stocked: ' + card_type['name'] + ', card id: ' + str(card['id']))
 
