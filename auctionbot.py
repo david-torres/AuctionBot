@@ -274,10 +274,11 @@ def room_chat(message):
     This function is executed upon receiving the 'RoomChatMessage' event
     Handles responding to chat commands
     """
-    global current_auction
-    global current_bid
-    global max_bid
+    global restocking
     global live
+
+    if not message['roomName'] == room:
+        return
 
     # bot ignores messages from itself
     if 'text' in message and message['from'] == bot_user:
@@ -288,7 +289,6 @@ def room_chat(message):
         if 'text' in message and unban_cmd in message['text']:
             unban_bidder(message)
         if 'text' in message and restock_cmd in message['text']:
-            global restocking
             restocking = True
             while restocking:
                 restock()
@@ -372,14 +372,11 @@ def restock():
 
     if bot_profile['gold'] >= pack_price:
         scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
-        scrolls.send({'msg': 'ProfileDataInfo'})
-        time.sleep(5)
     elif bot_profile['gold'] >= single_price:
         scrolls.send({'itemId': single_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
-        scrolls.send({'msg': 'ProfileDataInfo'})
-        time.sleep(5)
     else:
         scrolls.unsubscribe('BuyStoreItemResponse')
+        scrolls.send({'msg': 'LibraryView'})
         restocking = False
 
     lock.release()
@@ -407,7 +404,7 @@ def process_bid(message):
         logging.error('User has submitted a bid but is not in known profiles')
         logging.error(str(message))
         logging.error(str(profiles))
-        text = 'ERROR! Failed to register bid from ' + bidder + '. This is a known bug, maybe try again?'
+        text = 'ERROR! Failed to register bid from ' + bidder + '. This is a known bug, please re-enter the room'
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
         lock.release()
         return
@@ -803,8 +800,8 @@ def restock_items(message):
             text = 'Stocked: ' + card_type['name']
             scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
             time.sleep(1)
-        scrolls.send({'msg': 'LibraryView'})
         logging.info('Stocked: ' + card_type['name'] + ', card id: ' + str(card['id']))
+    scrolls.send({'msg': 'ProfileDataInfo'})
 
 
 def bid_reminder(trade_room):
@@ -880,6 +877,7 @@ def select_from_catalog():
     for requested_scroll, num_requests in requested.iteritems():
         if num_requests > highest_rank:
             top_request = requested_scroll
+            highest_rank = num_requests
 
     if top_request:
         for catalog_index, catalog_item in enumerate(catalog):
@@ -910,11 +908,8 @@ def populate_catalog():
         for library_item in library:
             if library_item['tradable'] is True:
 
-                # check rarity of the base card
+                # get the base card
                 card_type = card_list[library_item['typeId']]
-                if card_type['rarity'] == 0:
-                    # skip commons
-                    continue
 
                 # pricing
                 for price in prices:
