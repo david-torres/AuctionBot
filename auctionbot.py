@@ -609,6 +609,9 @@ def trade_invite_response(message):
     global current_auction
     global current_bid
 
+    if not current_auction:
+        return
+
     # bidder has accepted the trade invite
     if message['status'] == 'ACCEPT':
         # add the card to the trade
