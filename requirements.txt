@@ -2,3 +2,4 @@ pycrypto
 requests
 zdaemon
 pyyaml
+fuzzywuzzy

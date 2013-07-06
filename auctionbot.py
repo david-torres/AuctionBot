@@ -1,4 +1,5 @@
 from ScrollsSocketClient import ScrollsSocketClient
+from fuzzywuzzy import process
 import threading
 import random
 import requests
@@ -302,7 +303,7 @@ def room_chat(message):
 
     # handle !request
     if 'text' in message and request_cmd in message['text']:
-        request(message)
+        process_request(message)
 
     # handle !announce
     if 'text' in message and announce_cmd == message['text']:
@@ -701,7 +702,7 @@ def out_of_stock():
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
-def request(message):
+def process_request(message):
     lock.acquire()
     """
     Respond to the !request command
@@ -721,6 +722,14 @@ def request(message):
             scroll_name = card_type['name']
             scroll_exists = True
             break
+
+    # fuzzy match
+    if not scroll_exists:
+        card_names = [card_type['name'] for card_id, card_type in card_list.iteritems()]
+        fuzzy_match = process.extractOne(requested_scroll, card_names)
+        if fuzzy_match and fuzzy_match[1] > 70:
+            scroll_name = fuzzy_match[0]
+            scroll_exists = True
 
     if not scroll_exists:
         text = 'Invalid request from ' + requester + '. No scroll named ' + requested_scroll
