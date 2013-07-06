@@ -173,6 +173,7 @@ global restocking
 global requested
 global requesters
 global lock
+global prices
 
 email = 'scrolls.auctionbot@gmail.com'
 password = '98*psq2K&t7MPv72$@&FJe7z'
