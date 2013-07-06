@@ -2,6 +2,7 @@ from ScrollsSocketClient import ScrollsSocketClient
 import threading
 import random
 import requests
+import yaml
 import logging
 import time
 import re
@@ -175,13 +176,15 @@ global requesters
 global lock
 global prices
 
-email = 'scrolls.auctionbot@gmail.com'
-password = '98*psq2K&t7MPv72$@&FJe7z'
+config_file = open('config.yaml', 'r')
+config = yaml.load(config_file)
 
-bot_name = 'AuctionBot v0.1a'
-bot_user = 'AuctionBot'
+email = config['email']
+password = config['password']
+room = config['room']
+bot_name = config['bot_name']
+bot_user = config['bot_user']
 bot_profile = None
-room = 'auction'
 
 admins = ['detour_', 'aTidwell', 'Tidwell2', 'Tidwell3', 'ScrollsToolbox']
 
