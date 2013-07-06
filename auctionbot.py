@@ -34,6 +34,7 @@ class AuctionThread(threading.Thread):
             unban_all()
 
             restocking = True
+            logging.info('Begin auto-restocking')
             while restocking:
                 restock()
 
@@ -294,6 +295,7 @@ def room_chat(message):
             unban_bidder(message)
         if 'text' in message and restock_cmd in message['text']:
             restocking = True
+            logging.info('Begin manual restocking')
             while restocking:
                 restock()
 
@@ -376,9 +378,11 @@ def restock():
 
     if bot_profile['gold'] >= pack_price:
         scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
+        logging.info('waiting to restock')
         time.sleep(10)
     elif bot_profile['gold'] >= single_price:
         scrolls.send({'itemId': single_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
+        logging.info('waiting to restock')
         time.sleep(10)
     else:
         scrolls.unsubscribe('BuyStoreItemResponse')
