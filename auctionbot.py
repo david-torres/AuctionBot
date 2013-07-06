@@ -277,7 +277,7 @@ def room_chat(message):
     global restocking
     global live
 
-    if not message['roomName'] == room:
+    if 'roomName' in message and not message['roomName'] == room:
         return
 
     # bot ignores messages from itself
@@ -372,8 +372,10 @@ def restock():
 
     if bot_profile['gold'] >= pack_price:
         scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
+        time.sleep(10)
     elif bot_profile['gold'] >= single_price:
         scrolls.send({'itemId': single_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
+        time.sleep(10)
     else:
         scrolls.unsubscribe('BuyStoreItemResponse')
         scrolls.send({'msg': 'LibraryView'})
