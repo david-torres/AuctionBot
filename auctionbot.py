@@ -213,6 +213,7 @@ completed_auction = None
 restocking = False
 requested = {}
 requesters = {}
+prices = None
 
 auction_thread = AuctionThread()
 lock = threading.Lock()
@@ -371,11 +372,11 @@ def restock():
     if bot_profile['gold'] >= pack_price:
         scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
         scrolls.send({'msg': 'ProfileDataInfo'})
-        time.sleep(1)
+        time.sleep(5)
     elif bot_profile['gold'] >= single_price:
         scrolls.send({'itemId': single_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
         scrolls.send({'msg': 'ProfileDataInfo'})
-        time.sleep(1)
+        time.sleep(5)
     else:
         scrolls.unsubscribe('BuyStoreItemResponse')
         restocking = False
@@ -897,9 +898,11 @@ def populate_catalog():
     global library
     global catalog
     global card_list
+    global prices
 
-    prices_r = requests.get('http://api.scrollspost.com/v1/prices/1-day')
-    prices = prices_r.json()
+    if not prices:
+        prices_r = requests.get('http://api.scrollspost.com/v1/prices/1-day')
+        prices = prices_r.json()
 
     if prices:
         catalog = []
