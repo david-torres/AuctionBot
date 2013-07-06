@@ -940,8 +940,9 @@ def ban(bidder):
     add a user to the ban list
     """
     global banned
-    logging.info('Banned ' + bidder)
-    banned.update({bidder: time.time()})
+    if bidder:
+        logging.info('Banned ' + bidder)
+        banned.update({bidder: time.time()})
 
 
 def unban(bidder):
