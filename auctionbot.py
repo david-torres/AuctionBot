@@ -182,13 +182,14 @@ bot_user = 'AuctionBot'
 bot_profile = None
 room = 'auction'
 
-admins = ['detour_', 'aTidwell']
+admins = ['detour_', 'aTidwell', 'Tidwell2', 'Tidwell3', 'ScrollsToolbox']
 
 bid_cmd = '!bid'
 help_cmd = '!help'
 announce_cmd = '!announce'
 request_cmd = '!request'
 unban_cmd = '!unban'
+restock_cmd = '!restock'
 
 profiles = {}
 profiles_last_seen = {}
@@ -284,6 +285,11 @@ def room_chat(message):
     if 'from' in message and message['from'] in admins:
         if 'text' in message and unban_cmd in message['text']:
             unban_bidder(message)
+        if 'text' in message and restock_cmd in message['text']:
+            global restocking
+            restocking = True
+            while restocking:
+                restock()
 
     # handle !bid
     if 'text' in message and bid_cmd in message['text']:
@@ -394,7 +400,18 @@ def process_bid(message):
     global profiles
 
     bidder = message['from']
+
+    if not bidder in profiles:
+        logging.error('User has submitted a bid but is not in known profiles')
+        logging.error(str(message))
+        logging.error(str(profiles))
+        text = 'ERROR! Failed to register bid from ' + bidder + '. This is a known bug, maybe try again?'
+        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+        lock.release()
+        return
+
     user = profiles[bidder]
+
     bid = message['text'].split(bid_cmd)[1].strip()
     bid_re = re.match('^((\d+)\s?g?){1}', bid)
 
@@ -832,6 +849,7 @@ def bot_profile_data(message):
     """
     global bot_profile
     bot_profile.update(message['profileData'])
+    logging.info('Purse: ' + str(bot_profile['gold']))
 
 
 ###
