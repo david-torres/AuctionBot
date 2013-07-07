@@ -53,7 +53,7 @@ class AuctionThread(threading.Thread):
 
             auction_start = time.time()
             auction_start_timer = 20
-            auction_start_sleep = 10
+            auction_start_sleep = 20
             # auction_start_timer = 10
             # auction_start_sleep = 5
 
@@ -92,6 +92,9 @@ class AuctionThread(threading.Thread):
             # announce live auction
             announce()
             while True:
+                has_lock = lock.acquire(0)
+                if not has_lock:
+                    continue
                 now = time.time()
 
                 # we have a fresh bid, reset auction ending soon warning
@@ -105,6 +108,7 @@ class AuctionThread(threading.Thread):
                     if (now - auction_start) >= auction_end_threshold_3:
                         # auction has ended
                         if auction_end_warn and (now - auction_end_warn_time) > auction_end_threshold_3:
+                            lock.release()
                             won_auction()
                             if completed_auction_status():
                                 break
@@ -119,6 +123,7 @@ class AuctionThread(threading.Thread):
                     elif (now - auction_start) >= auction_end_threshold_2:
                         # auction has ended
                         if auction_end_warn and (now - auction_end_warn_time) > auction_bid_threshold_2:
+                            lock.release()
                             won_auction()
                             if completed_auction_status():
                                 break
@@ -133,6 +138,7 @@ class AuctionThread(threading.Thread):
                     elif (now - auction_start) >= auction_end_threshold_1:
                         # auction has ended
                         if auction_end_warn and (now - auction_end_warn_time) > auction_bid_threshold_1:
+                            lock.release()
                             won_auction()
                             if completed_auction_status():
                                 break
@@ -147,12 +153,14 @@ class AuctionThread(threading.Thread):
                 else:
                     # no bids, cancel
                     if (now - auction_start) >= auction_cancel_threshold:
+                        lock.release()
                         cancel_auction()
                         break
                     # warn the auction will be cancelled
                     if (now - auction_start) >= auction_cancel_warn_threshold and auction_cancel_warn is False:
                         auction_cancel_warn = True
                         auction_cancel_countdown(auction_cancel_threshold - auction_cancel_warn_threshold)
+                lock.release()
 
 global catalog
 global starting_bid
@@ -267,6 +275,9 @@ def room_info(message):
     global current_bid
     global live
     global profiles
+
+    if 'roomName' in message and not message['roomName'] == room:
+        return
 
     process_profiles(message)
 
@@ -427,23 +438,23 @@ def process_bid(message):
     if not live or not current_auction:
         text = bidder + ', No auctions are currently active.'
     elif bidder in banned:
-        text = 'Invalid bid from: "' + bidder + '", you are banned.'
+        text = 'Invalid bid from: ' + bidder + ', you are banned.'
     elif not user['acceptTrades']:
-        text = 'Invalid bid from: "' + bidder + '", you must accept trades.'
+        text = 'Invalid bid from: ' + bidder + ', you must accept trades.'
     elif not bid_re:
-        text = 'Invalid bid from: "' + bidder + '"'
+        text = 'Invalid bid from: ' + bidder + ''
     elif not bid_re.group(2).isdigit():
-        text = 'Invalid bid from: "' + bidder + '"'
+        text = 'Invalid bid from: ' + bidder + ''
     else:
         bid_amount = int(bid_re.group(2))
         if bidder == highest_bidder:
-            text = 'Invalid bid from: "' + bidder + '", you are already the highest bidder. Current bid: ' + str(current_bid)
+            text = 'Invalid bid from: ' + bidder + ', you are already the highest bidder. Current bid: ' + str(current_bid)
         elif current_bid > 0 and bid_amount <= current_bid:
-            text = 'Invalid bid from: "' + bidder + '", bid too low. Current bid: ' + str(current_bid)
+            text = 'Invalid bid from: ' + bidder + ', bid too low. Current bid: ' + str(current_bid)
         elif current_bid == 0 and bid_amount < starting_bid:
-            text = 'Invalid bid from: "' + bidder + '", bidding starts at: ' + str(starting_bid)
+            text = 'Invalid bid from: ' + bidder + ', bidding starts at: ' + str(starting_bid)
         elif bid_amount > max_bid:
-            text = 'Invalid bid from: "' + bidder + '", bid is greater than max bid.'
+            text = 'Invalid bid from: ' + bidder + ', bid is greater than max bid.'
         else:
             if highest_bidder:
                 previous_bidder = highest_bidder
@@ -453,7 +464,7 @@ def process_bid(message):
             highest_bidder = bidder
             last_bid = time.time()
 
-            text = 'Registered bid for ' + current_auction['name'] + ' from: "' + bidder + '", Bid: ' + str(bid_amount) + 'g'
+            text = 'Registered bid for ' + current_auction['name'] + ' from: ' + bidder + ', Bid: ' + str(bid_amount) + 'g'
             if previous_bidder:
                 text += '\n' + previous_bidder + ' has been outbid!'
             announce()
@@ -608,8 +619,21 @@ def trade_invite_response(message):
     global highest_bidder
     global current_auction
     global current_bid
+    global auction_end
+
+    if not auction_end:
+        return
 
     if not current_auction:
+        logging.error('Trade invite response but no current auction')
+        return
+
+    if not highest_bidder:
+        logging.error('Trade invite response but no high bidder')
+        return
+
+    if not message['to']['name'] == highest_bidder:
+        logging.error('Trade invite response but not to highest_bidder')
         return
 
     # bidder has accepted the trade invite
@@ -635,8 +659,21 @@ def trade_view_response(message):
     global current_auction
     global current_bid
     global auction_end
+    global highest_bidder
 
     if not auction_end:
+        return
+
+    if not current_auction:
+        logging.error('Trade view response but no current auction')
+        return
+
+    if not highest_bidder:
+        logging.error('Trade view response but no high bidder')
+        return
+
+    if not message['to']['profile']['name'] == highest_bidder:
+        logging.error('Trade view response but not to highest_bidder')
         return
 
     if 'cardIds' in message['from'] and len(message['from']['cardIds']) == 0:
@@ -815,13 +852,15 @@ def unban_bidder(message):
 
 def restock_items(message):
     global card_list
+    stocked = {}
     for card in message['cards']:
         card_type = card_list[card['typeId']]
-        if card_type['rarity'] > 0:
-            text = 'Stocked: ' + card_type['name']
-            scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
-            time.sleep(5)
-        logging.info('Stocked: ' + card_type['name'] + ', card id: ' + str(card['id']))
+        stocked.append(card_type['name'])
+
+    text = 'Stocked: ' + ', '.join(stocked)
+    logging.info(text)
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+    time.sleep(5)
     scrolls.send({'msg': 'ProfileDataInfo'})
 
 
