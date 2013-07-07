@@ -38,7 +38,7 @@ class AuctionThread(threading.Thread):
             while restocking:
                 should_sleep = restock()
                 if should_sleep:
-                    time.sleep(10)
+                    time.sleep(5)
 
             # out of stock
             if len(catalog) <= 0:
