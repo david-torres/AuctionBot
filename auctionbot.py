@@ -558,6 +558,7 @@ def complete_auction():
     logging.info(text + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     scrolls.send({'msg': 'LibraryView'})
+    scrolls.send({'msg': 'ProfileDataInfo'})
 
     current_auction = None
     current_bid = None
