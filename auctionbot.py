@@ -6,6 +6,7 @@ import requests
 import yaml
 import logging
 import time
+import json
 import re
 
 
@@ -109,7 +110,7 @@ class AuctionThread(threading.Thread):
                     # threshold 3 (6m)
                     if (now - auction_start) >= auction_end_threshold_3:
                         # auction has ended
-                        if auction_end_warn and (now - auction_end_warn_time) > auction_end_threshold_3:
+                        if auction_end_warn and (now - auction_end_warn_time) > auction_bid_threshold_3:
                             lock.release()
                             won_auction()
                             if completed_auction_status():
@@ -840,8 +841,8 @@ def help():
     Respond to the !help command
     """
     text = '[[ ' + bot_name + ' ]]\n'
-    text += 'Send " !bid ###g " to bid on the current auction\n'
-    text += 'Send " !request scroll_name " to request a specific scroll\n'
+    text += 'Send " !bid GOLD " to bid on the current auction\n'
+    text += 'Send " !request SCROLL " to request a specific scroll\n'
     text += 'Send " !announce " to see the current auction, high bidder, and current bid'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
@@ -897,6 +898,7 @@ def library_view(message):
 
     if message['profileId'] == bot_profile['id']:
         library = message['cards']
+        sync_collection(library)
         populate_catalog()
 
 
@@ -994,6 +996,11 @@ def populate_catalog():
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
     lock.release()
+
+
+def sync_collection(library):
+    sync_r = requests.post('http://scrollstoolbox.com/collection/update?inGameName=' + bot_user, data=json.dumps(library))
+    logging.info(sync_r.text)
 
 
 def ban(bidder):
