@@ -36,7 +36,9 @@ class AuctionThread(threading.Thread):
             restocking = True
             logging.info('Begin auto-restocking')
             while restocking:
-                restock()
+                should_sleep = restock()
+                if should_sleep:
+                    time.sleep(10)
 
             # out of stock
             if len(catalog) <= 0:
@@ -385,22 +387,25 @@ def restock():
     single_price = 100
     single_item_id = 137
 
+    did_stock = False
+
     scrolls.subscribe('BuyStoreItemResponse', restock_items)
 
     if bot_profile['gold'] >= pack_price:
         scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
         logging.info('Stocked a pack: waiting to restock')
-        time.sleep(10)
+        did_stock = True
     elif bot_profile['gold'] >= single_price:
         scrolls.send({'itemId': single_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
         logging.info('Stocked a single: waiting to restock')
-        time.sleep(10)
+        did_stock = True
     else:
         scrolls.unsubscribe('BuyStoreItemResponse')
         scrolls.send({'msg': 'LibraryView'})
         restocking = False
 
     lock.release()
+    return did_stock
 
 
 def process_bid(message):
