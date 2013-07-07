@@ -926,10 +926,10 @@ def bot_profile_data(message):
 
 def notify_requesters(requested_scroll):
     global requesters
-
     requesters_str = ', '.join([requestee for requestee, scroll in requesters.iteritems() if scroll == requested_scroll])
     for requestee in dict(requesters).keys():
-        requesters.pop(requestee)
+        if requesters[requestee] == requested_scroll:
+            requesters.pop(requestee)
 
     logging.info('notifying ' + requesters_str + ' ' + requested_scroll + ' is up for auction')
     text = 'Notification: ' + requesters_str + '\n' + requested_scroll + ' is up for auction.'
