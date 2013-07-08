@@ -224,6 +224,7 @@ previous_bid = None
 previous_bidder = None
 live = False
 max_bid = 10000
+min_bid = 10
 last_bid = None
 complete_auction_threshold = 60
 ban_threshold = 3600
@@ -463,6 +464,8 @@ def process_bid(message):
             text = 'Invalid bid from: ' + bidder + ', bid too low. Current bid: ' + str(current_bid)
         elif current_bid == 0 and bid_amount < starting_bid:
             text = 'Invalid bid from: ' + bidder + ', bidding starts at: ' + str(starting_bid)
+        elif current_bid > 0 and bid_amount < (current_bid + min_bid):
+            text = 'Invalid bid from: ' + bidder + ', min bid is: ' + str(current_bid + min_bid)
         elif bid_amount > max_bid:
             text = 'Invalid bid from: ' + bidder + ', bid is greater than max bid.'
         else:
