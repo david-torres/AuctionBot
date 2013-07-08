@@ -32,6 +32,7 @@ class AuctionThread(threading.Thread):
 
             # new auction
             unban_all()
+            time.sleep(5)
 
             restocking = True
             logging.info('Begin auto-restocking')
@@ -205,6 +206,7 @@ bid_cmd = '!bid'
 help_cmd = '!help'
 announce_cmd = '!announce'
 request_cmd = '!request'
+ban_cmd = '!ban'
 unban_cmd = '!unban'
 restock_cmd = '!restock'
 
@@ -305,6 +307,8 @@ def room_chat(message):
 
     # handle admin commands
     if 'from' in message and message['from'] in admins:
+        if 'text' in message and ban_cmd in message['text']:
+            ban_bidder(message)
         if 'text' in message and unban_cmd in message['text']:
             unban_bidder(message)
         if 'text' in message and restock_cmd in message['text']:
@@ -763,9 +767,16 @@ def process_request(message):
     global card_list
     global catalog
     global current_auction
+    global banned
 
     requester = message['from']
     requested_scroll = message['text'].split(request_cmd)[1].strip()
+
+    if requester in banned:
+        text = 'Invalid request from ' + requester + '. You are banned.'
+        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+        lock.release()
+        return
 
     scroll_exists = False
     scroll_name = None
@@ -852,10 +863,20 @@ def help():
 ### ONE-OFF RESPONSES
 ###
 
+def ban_bidder(message):
+    bidder = message['text'].split(ban_cmd)[1].strip()
+    ban(bidder)
+    text = 'Banned: ' + bidder
+    logging.info(text)
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
 
 def unban_bidder(message):
     bidder = message['text'].split(unban_cmd)[1].strip()
     unban(bidder)
+    text = 'Unbanned: ' + bidder
+    logging.info(text)
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
 def restock_items(message):
@@ -1032,9 +1053,7 @@ def unban(bidder):
     global banned
     if bidder in banned:
         banned.pop(bidder)
-        text = 'Unbanned: ' + bidder
-        logging.info(text)
-        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+        logging.info('Unbanned: ' + bidder)
 
 
 def unban_all():
