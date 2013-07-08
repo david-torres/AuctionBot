@@ -31,7 +31,6 @@ class AuctionThread(threading.Thread):
                 continue
 
             # new auction
-            time.sleep(10)
             unban_all()
 
             restocking = True
@@ -46,6 +45,7 @@ class AuctionThread(threading.Thread):
                 out_of_stock()
                 break
 
+            time.sleep(10)
             current_auction = select_from_catalog()
             logging.info('Starting auction for ' + current_auction['name'] + ', card id: ' + str(current_auction['id']))
             starting_bid = current_auction['starting_bid']
@@ -70,18 +70,18 @@ class AuctionThread(threading.Thread):
 
             # real values
             auction_end_threshold_1 = 120  # 2m
-            auction_bid_threshold_1 = 60  # 1m
+            auction_bid_threshold_1 = 30  # 30s
             auction_end_threshold_2 = 240  # 4m
-            auction_bid_threshold_2 = 30  # 30s
+            auction_bid_threshold_2 = 20  # 20s
             auction_end_threshold_3 = 360  # 6m
-            auction_bid_threshold_3 = 15  # 15s
+            auction_bid_threshold_3 = 10  # 10s
             auction_end_warn = False
             auction_end_warn_time = 0
 
             # auction_cancel_threshold = 60  # 3m
             # auction_cancel_warn_threshold = 20  # 2m30s
-            auction_cancel_threshold = 180  # 3m
-            auction_cancel_warn_threshold = 150  # 2m30s
+            auction_cancel_threshold = 90  # 1m20s
+            auction_cancel_warn_threshold = 30  # 30s
             auction_cancel_warn = False
 
             # start the countdown timer
@@ -284,8 +284,8 @@ def room_info(message):
 
     process_profiles(message)
 
-    if live:
-        announce()
+    # if live:
+    #     announce()
 
 
 def room_chat(message):
@@ -762,6 +762,7 @@ def process_request(message):
     global requesters
     global card_list
     global catalog
+    global current_auction
 
     requester = message['from']
     requested_scroll = message['text'].split(request_cmd)[1].strip()
@@ -787,7 +788,7 @@ def process_request(message):
     else:
         scroll_found_in_catalog = False
         for item in catalog:
-            if item['name'] == scroll_name:
+            if item['name'] == scroll_name and not item['id'] == current_auction['id']:
                 scroll_found_in_catalog = True
                 break
 
@@ -843,7 +844,7 @@ def help():
     text = '[[ ' + bot_name + ' ]]\n'
     text += 'Send " !bid GOLD " to bid on the current auction\n'
     text += 'Send " !request SCROLL " to request a specific scroll\n'
-    text += 'Send " !announce " to see the current auction, high bidder, and current bid'
+    text += 'Send " !announce " to see the current auction'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
@@ -937,8 +938,10 @@ def notify_requesters(requested_scroll):
 
 
 def select_from_catalog():
+    lock.acquire()
     global catalog
     global requested
+    global card_list
 
     highest_rank = 0
     top_request = None
@@ -947,14 +950,25 @@ def select_from_catalog():
             top_request = requested_scroll
             highest_rank = num_requests
 
+    item_for_auction = None
     if top_request:
         for catalog_index, catalog_item in enumerate(catalog):
             if catalog_item['name'] == top_request:
                 requested.pop(top_request)
                 notify_requesters(top_request)
-                return catalog.pop(catalog_index)
+                item_for_auction = catalog.pop(catalog_index)
     else:
-        return catalog.pop(0)
+        good_cards = []
+        for catalog_index, catalog_item in enumerate(catalog):
+            card_type = card_list[catalog_item['type_id']]
+            if card_type['rarity'] > 0:
+                good_cards.append(catalog_index)
+        random.shuffle(good_cards)
+        rand_cat_index = good_cards.pop()
+        item_for_auction = catalog.pop(rand_cat_index)
+
+    lock.release()
+    return item_for_auction
 
 
 def populate_catalog():
@@ -988,6 +1002,7 @@ def populate_catalog():
 
                         auction_item = {
                             'id': library_item['id'],
+                            'type_id': card_type['id'],
                             'name': card_type['name'],
                             'starting_bid': starting_bid
                         }
