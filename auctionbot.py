@@ -31,15 +31,25 @@ class AuctionThread(threading.Thread):
                 continue
 
             # new auction
-            time.sleep(10)
             unban_all()
 
+            # wait for profile update
+            time.sleep(10)
+
             restocking = True
+            did_restock = False
             logging.info('Begin auto-restocking')
             while restocking:
-                should_sleep = restock()
-                if should_sleep:
+                did_restock = restock()
+                if did_restock:
                     time.sleep(5)
+
+            # notify room we're done restocking
+            if did_restock:
+                scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': 'Finished restocking.'})
+
+            # wait for requests and library update
+            time.sleep(10)
 
             # out of stock
             if len(catalog) <= 0:
@@ -965,6 +975,7 @@ def select_from_catalog():
     global catalog
     global requested
 
+    auction_item = None
     highest_rank = 0
     top_request = None
     for requested_scroll, num_requests in requested.iteritems():
@@ -977,9 +988,11 @@ def select_from_catalog():
             if catalog_item['name'] == top_request:
                 requested.pop(top_request)
                 notify_requesters(top_request)
-                return catalog.pop(catalog_index)
+                auction_item = catalog.pop(catalog_index)
     else:
-        return catalog.pop(0)
+        auction_item = catalog.pop(0)
+
+    return auction_item
 
 
 def populate_catalog():
