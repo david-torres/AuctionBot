@@ -975,7 +975,7 @@ def notify_requesters(requested_scroll):
 
 
 def select_from_catalog():
-    lock.aquire()
+    lock.acquire()
     global catalog
     global requested
 
