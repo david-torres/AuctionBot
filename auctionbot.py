@@ -785,6 +785,7 @@ def process_request(message):
     global requesters
     global card_list
     global catalog
+    global current_auction
 
     requester = message['from']
     requested_scroll = message['text'].split(request_cmd)[1].strip()
@@ -810,6 +811,8 @@ def process_request(message):
     else:
         scroll_found_in_catalog = False
         for item in catalog:
+            if current_auction and item['id'] == current_auction['id']:
+                continue
             if item['name'] == scroll_name:
                 scroll_found_in_catalog = True
                 break
@@ -972,6 +975,7 @@ def notify_requesters(requested_scroll):
 
 
 def select_from_catalog():
+    lock.aquire()
     global catalog
     global requested
 
@@ -991,7 +995,7 @@ def select_from_catalog():
                 auction_item = catalog.pop(catalog_index)
     else:
         auction_item = catalog.pop(0)
-
+    lock.release()
     return auction_item
 
 
@@ -1004,6 +1008,7 @@ def populate_catalog():
     global catalog
     global card_list
     global prices
+    global current_auction
 
     if not prices:
         prices_r = requests.get('http://api.scrollspost.com/v1/prices/1-day')
@@ -1013,6 +1018,9 @@ def populate_catalog():
         catalog = []
         for library_item in library:
             if library_item['tradable'] is True:
+
+                if current_auction and current_auction['id'] == library_item['id']:
+                    continue
 
                 # get the base card
                 card_type = card_list[library_item['typeId']]
