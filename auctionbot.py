@@ -199,12 +199,13 @@ bot_name = config['bot_name']
 bot_user = config['bot_user']
 bot_profile = None
 
-admins = ['detour_', 'aTidwell', 'Tidwell2', 'Tidwell3', 'ScrollsToolbox']
+admins = ['detour_', 'aTidwell', 'Tidwell3', 'ScrollsToolbox']
 
 bid_cmd = '!bid'
 help_cmd = '!help'
 announce_cmd = '!announce'
 request_cmd = '!request'
+ban_cmd = '!ban'
 unban_cmd = '!unban'
 restock_cmd = '!restock'
 
@@ -222,6 +223,7 @@ previous_bid = None
 previous_bidder = None
 live = False
 max_bid = 10000
+min_bid = 10
 last_bid = None
 complete_auction_threshold = 60
 ban_threshold = 3600
@@ -284,8 +286,9 @@ def room_info(message):
 
     process_profiles(message)
 
-    if live:
-        announce()
+    # stop spamming the room
+    # if live:
+    #     announce()
 
 
 def room_chat(message):
@@ -295,6 +298,7 @@ def room_chat(message):
     """
     global restocking
     global live
+    global banned
 
     if 'roomName' in message and not message['roomName'] == room:
         return
@@ -303,8 +307,15 @@ def room_chat(message):
     if 'text' in message and message['from'] == bot_user:
         return
 
+    # bot ignores messages from banned users but not admins
+    if 'from' in message and message['from'] in banned:
+        if not message['from'] in admins:
+            return
+
     # handle admin commands
     if 'from' in message and message['from'] in admins:
+        if 'text' in message and ban_cmd in message['text']:
+            ban_bidder(message)
         if 'text' in message and unban_cmd in message['text']:
             unban_bidder(message)
         if 'text' in message and restock_cmd in message['text']:
@@ -459,6 +470,8 @@ def process_bid(message):
             text = 'Invalid bid from: ' + bidder + ', bid too low. Current bid: ' + str(current_bid)
         elif current_bid == 0 and bid_amount < starting_bid:
             text = 'Invalid bid from: ' + bidder + ', bidding starts at: ' + str(starting_bid)
+        elif current_bid > 0 and bid_amount < (current_bid + min_bid):
+            text = 'Invalid bid from: ' + bidder + ', minimum bid is: ' + str(current_bid + min_bid)
         elif bid_amount > max_bid:
             text = 'Invalid bid from: ' + bidder + ', bid is greater than max bid.'
         else:
@@ -806,6 +819,7 @@ def process_request(message):
 
             text = 'Registered request from ' + requester + '. ' + scroll_name
             text += ' requested ' + str(requested[scroll_name]) + ' times'
+            logging.info(text)
 
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     lock.release()
@@ -843,7 +857,7 @@ def help():
     text = '[[ ' + bot_name + ' ]]\n'
     text += 'Send " !bid GOLD " to bid on the current auction\n'
     text += 'Send " !request SCROLL " to request a specific scroll\n'
-    text += 'Send " !announce " to see the current auction, high bidder, and current bid'
+    text += 'Send " !announce " to see the current auction'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
@@ -852,9 +866,20 @@ def help():
 ###
 
 
+def ban_bidder(message):
+    bidder = message['text'].split(ban_cmd)[1].strip()
+    ban(bidder)
+    text = 'Banned: ' + bidder
+    logging.info(text)
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
+
 def unban_bidder(message):
     bidder = message['text'].split(unban_cmd)[1].strip()
     unban(bidder)
+    text = 'Unbanned: ' + bidder
+    logging.info(text)
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
 def restock_items(message):
@@ -1016,10 +1041,8 @@ def ban(bidder):
 def unban(bidder):
     global banned
     if bidder in banned:
+        logging.info('Unbanned: ' + bidder)
         banned.pop(bidder)
-        text = 'Unbanned: ' + bidder
-        logging.info(text)
-        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
 def unban_all():
