@@ -769,7 +769,6 @@ def process_request(message):
     global requesters
     global card_list
     global catalog
-    global current_auction
     global banned
 
     requester = message['from']
@@ -802,8 +801,6 @@ def process_request(message):
     else:
         scroll_found_in_catalog = False
         for item in catalog:
-            if current_auction and item['id'] == current_auction['id']:
-                continue
             if item['name'] == scroll_name:
                 scroll_found_in_catalog = True
                 break
