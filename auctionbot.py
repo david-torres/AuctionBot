@@ -817,9 +817,10 @@ def process_request(message):
                 requested[scroll_name] += 1
             else:
                 requested[scroll_name] = 1
-
+            logging.info('Requested in process_request ' + str(requested))
             text = 'Registered request from ' + requester + '. ' + scroll_name
             text += ' requested ' + str(requested[scroll_name]) + ' times'
+            logging.info(text)
 
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     lock.release()
@@ -965,6 +966,7 @@ def select_from_catalog():
     global catalog
     global requested
     global card_list
+    logging.info('Requested in select_from_catalog' + str(requested))
 
     highest_rank = 0
     top_request = None
@@ -972,11 +974,12 @@ def select_from_catalog():
         if num_requests > highest_rank:
             top_request = requested_scroll
             highest_rank = num_requests
-
     item_for_auction = None
     if top_request:
+        logging.info('Top request: ' + top_request)
         for catalog_index, catalog_item in enumerate(catalog):
             if catalog_item['name'] == top_request:
+                logging.info('Requested in select_from_catalog pre-pop() ' + str(requested))
                 requested.pop(top_request)
                 notify_requesters(top_request)
                 item_for_auction = catalog.pop(catalog_index)
