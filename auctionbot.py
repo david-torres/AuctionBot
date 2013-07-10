@@ -778,6 +778,7 @@ def out_of_stock():
 
 def process_request(message):
     lock.acquire()
+    logging.info('LOCK process_request')
     """
     Respond to the !request command
     """
@@ -835,6 +836,7 @@ def process_request(message):
             logging.info(text)
 
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+    logging.info('UNLOCK process_request')
     lock.release()
 
 
@@ -976,8 +978,11 @@ def notify_requesters(requested_scroll):
 
 def select_from_catalog():
     lock.acquire()
+    logging.info('LOCK select_from_catalog')
     global catalog
     global requested
+
+    logging.info(str(requested))
 
     auction_item = None
     highest_rank = 0
@@ -988,13 +993,20 @@ def select_from_catalog():
             highest_rank = num_requests
 
     if top_request:
+        logging.info(top_request)
         for catalog_index, catalog_item in enumerate(catalog):
             if catalog_item['name'] == top_request:
-                requested.pop(top_request)
+                if top_request not in requested:
+                    logging.error('top request not in requested, how the fuck is this possible?!?!?')
+                else:
+                    requested.pop(top_request)
+
                 notify_requesters(top_request)
                 auction_item = catalog.pop(catalog_index)
     else:
         auction_item = catalog.pop(0)
+
+    logging.info('UNLOCK select_from_catalog')
     lock.release()
     return auction_item
 
