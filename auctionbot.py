@@ -38,18 +38,21 @@ class AuctionThread(threading.Thread):
 
             restocking = True
             did_restock = False
+            did_restock_once = False
             logging.info('Begin auto-restocking')
             while restocking:
                 did_restock = restock()
                 if did_restock:
+                    if not did_restock_once:
+                        did_restock_once = True
                     time.sleep(5)
 
             # notify room we're done restocking
-            if did_restock:
-                scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': 'Finished restocking.'})
+            if did_restock_once:
+                scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': 'Finished restocking. Pausing for requests.'})
 
             # wait for requests and library update
-            time.sleep(10)
+            time.sleep(20)
 
             # out of stock
             if len(catalog) <= 0:
@@ -217,7 +220,8 @@ announce_cmd = '!announce'
 request_cmd = '!request'
 ban_cmd = '!ban'
 unban_cmd = '!unban'
-restock_cmd = '!restock'
+hotstock_cmd = '!hotstock'
+queue_cmd = '!queue'
 
 profiles = {}
 profiles_last_seen = {}
@@ -243,6 +247,7 @@ restocking = False
 requested = {}
 requesters = {}
 prices = None
+hotstock = []
 
 auction_thread = AuctionThread()
 lock = threading.Lock()
@@ -328,11 +333,6 @@ def room_chat(message):
             ban_bidder(message)
         if 'text' in message and unban_cmd in message['text']:
             unban_bidder(message)
-        if 'text' in message and restock_cmd in message['text']:
-            restocking = True
-            logging.info('Begin manual restocking')
-            while restocking:
-                restock()
 
     # handle !bid
     if 'text' in message and bid_cmd in message['text']:
@@ -350,6 +350,14 @@ def room_chat(message):
     # handle !help
     if 'text' in message and help_cmd == message['text']:
         help()
+
+    # handle !hotstock
+    if 'text' in message and hotstock_cmd == message['text']:
+        announce_hotstock()
+
+    # handle !queue
+    if 'text' in message and queue_cmd == message['text']:
+        announce_queue()
 
     time.sleep(1)
 
@@ -371,6 +379,8 @@ def process_profiles(message):
     lock.acquire()
     global profiles
     global profiles_last_seen
+    global highest_bidder
+    global previous_bidder
 
     new_profiles = message['profiles']
     if new_profiles:
@@ -382,15 +392,24 @@ def process_profiles(message):
 
         # remove timed out users and refresh timers on others
         now = time.time()
-        timeout = 120  # timeout 2m
+        timeout = 60 * 10  # timeout 10m
 
+        # update timestamps
         for name in profiles.keys():
             if name in new_profiles_names:
                 profiles_last_seen[name] = now
 
+        # cleanup
         profiles_last_seen_iter = dict(profiles_last_seen)
         for name, last_seen in profiles_last_seen_iter.iteritems():
             if not name in new_profiles_names:
+                # never remove the highest bidder
+                if highest_bidder and name == highest_bidder:
+                    continue
+                # never remove the previous bidder
+                if previous_bidder and name == previous_bidder:
+                    continue
+                # remove old profiles
                 if now > (last_seen + timeout):
                     del profiles_last_seen[name]
                     del profiles[name]
@@ -870,13 +889,33 @@ def help():
     text = '[[ ' + bot_name + ' ]]\n'
     text += 'Send " !bid GOLD " to bid on the current auction\n'
     text += 'Send " !request SCROLL " to request a specific scroll\n'
-    text += 'Send " !announce " to see the current auction'
+    text += 'Send " !announce " to see the current auction\n'
+    text += 'Send " !hotstock " to see popular scrolls in stock\n'
+    text += 'Send " !queue " to see the auction queue'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
 ###
 ### ONE-OFF RESPONSES
 ###
+
+def announce_hotstock():
+    global hotstock
+    text = ', '.join(hotstock)
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
+
+def announce_queue():
+    global requested
+
+    queue = sorted(requested, key=requested.get, reverse=True)
+
+    if len(queue) > 0:
+        text = 'Auction queue is: ' + ', '.join(queue)
+    else:
+        text = 'Queue is empty'
+
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
 def ban_bidder(message):
@@ -958,10 +997,6 @@ def bot_profile_data(message):
     logging.info('Purse: ' + str(bot_profile['gold']))
 
 
-###
-### UTIL METHODS
-###
-
 def notify_requesters(requested_scroll):
     global requesters
     requesters_str = ', '.join([requestee for requestee, scroll in requesters.iteritems() if scroll == requested_scroll])
@@ -988,7 +1023,6 @@ def select_from_catalog():
             highest_rank = num_requests
 
     if top_request:
-        logging.info(top_request)
         for catalog_index, catalog_item in enumerate(catalog):
             if catalog_item['name'] == top_request:
                 requested.pop(top_request)
@@ -1044,12 +1078,27 @@ def populate_catalog():
 
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
+        process_hotstock()
     lock.release()
 
 
 def sync_collection(library):
     sync_r = requests.post('http://scrollstoolbox.com/collection/update?inGameName=' + bot_user, data=json.dumps(library))
     logging.info(sync_r.text)
+
+
+def process_hotstock():
+    global hotstock
+    global catalog
+
+    card_counts = {}
+    for card in catalog:
+        if card['name'] in card_counts:
+            card_counts[card['name']] += 1
+        else:
+            card_counts[card['name']] = 1
+
+    hotstock = [name for name, count in card_counts.iteritems() if count <= 3]
 
 
 def ban(bidder):
