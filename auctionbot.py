@@ -53,14 +53,13 @@ class AuctionThread(threading.Thread):
                 scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': 'Finished restocking. Pausing for requests.'})
 
             # wait for requests and library update
-            time.sleep(20)
+            time.sleep(30)
 
             # out of stock
             if len(catalog) <= 0:
                 out_of_stock()
                 break
 
-            time.sleep(10)
             current_auction = select_from_catalog()
             logging.info('Starting auction for ' + current_auction['name'] + ', card id: ' + str(current_auction['id']))
             starting_bid = current_auction['starting_bid']
@@ -85,11 +84,11 @@ class AuctionThread(threading.Thread):
 
             # real values
             auction_end_threshold_1 = 120  # 2m
-            auction_bid_threshold_1 = 30  # 30s
+            auction_bid_threshold_1 = 60  # 30s
             auction_end_threshold_2 = 240  # 4m
-            auction_bid_threshold_2 = 20  # 20s
+            auction_bid_threshold_2 = 30  # 20s
             auction_end_threshold_3 = 360  # 6m
-            auction_bid_threshold_3 = 10  # 10s
+            auction_bid_threshold_3 = 15  # 10s
             auction_end_warn = False
             auction_end_warn_time = 0
 
