@@ -1120,7 +1120,6 @@ def unban(bidder):
     if bidder in banned:
         logging.info('Unbanned: ' + bidder)
         banned.pop(bidder)
-        logging.info('Unbanned: ' + bidder)
 
 
 def unban_all():
