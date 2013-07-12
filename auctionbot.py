@@ -34,12 +34,26 @@ class AuctionThread(threading.Thread):
             unban_all()
             time.sleep(5)
 
+            # wait for profile update
+            time.sleep(10)
+
             restocking = True
+            did_restock = False
+            did_restock_once = False
             logging.info('Begin auto-restocking')
             while restocking:
-                should_sleep = restock()
-                if should_sleep:
+                did_restock = restock()
+                if did_restock:
+                    if not did_restock_once:
+                        did_restock_once = True
                     time.sleep(5)
+
+            # notify room we're done restocking
+            if did_restock_once:
+                scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': 'Finished restocking. Pausing for requests.'})
+
+            # wait for requests and library update
+            time.sleep(20)
 
             # out of stock
             if len(catalog) <= 0:
@@ -200,7 +214,7 @@ bot_name = config['bot_name']
 bot_user = config['bot_user']
 bot_profile = None
 
-admins = ['detour_', 'aTidwell', 'Tidwell2', 'Tidwell3', 'ScrollsToolbox']
+admins = ['detour_', 'aTidwell', 'Tidwell3', 'ScrollsToolbox']
 
 bid_cmd = '!bid'
 help_cmd = '!help'
@@ -208,7 +222,8 @@ announce_cmd = '!announce'
 request_cmd = '!request'
 ban_cmd = '!ban'
 unban_cmd = '!unban'
-restock_cmd = '!restock'
+hotstock_cmd = '!hotstock'
+queue_cmd = '!queue'
 
 profiles = {}
 profiles_last_seen = {}
@@ -234,6 +249,7 @@ restocking = False
 requested = {}
 requesters = {}
 prices = None
+hotstock = []
 
 auction_thread = AuctionThread()
 lock = threading.Lock()
@@ -287,6 +303,7 @@ def room_info(message):
 
     process_profiles(message)
 
+    # stop spamming the room
     # if live:
     #     announce()
 
@@ -298,6 +315,7 @@ def room_chat(message):
     """
     global restocking
     global live
+    global banned
 
     if 'roomName' in message and not message['roomName'] == room:
         return
@@ -306,17 +324,17 @@ def room_chat(message):
     if 'text' in message and message['from'] == bot_user:
         return
 
+    # bot ignores messages from banned users but not admins
+    if 'from' in message and message['from'] in banned:
+        if not message['from'] in admins:
+            return
+
     # handle admin commands
     if 'from' in message and message['from'] in admins:
         if 'text' in message and ban_cmd in message['text']:
             ban_bidder(message)
         if 'text' in message and unban_cmd in message['text']:
             unban_bidder(message)
-        if 'text' in message and restock_cmd in message['text']:
-            restocking = True
-            logging.info('Begin manual restocking')
-            while restocking:
-                restock()
 
     # handle !bid
     if 'text' in message and bid_cmd in message['text']:
@@ -334,6 +352,14 @@ def room_chat(message):
     # handle !help
     if 'text' in message and help_cmd == message['text']:
         help()
+
+    # handle !hotstock
+    if 'text' in message and hotstock_cmd == message['text']:
+        announce_hotstock()
+
+    # handle !queue
+    if 'text' in message and queue_cmd == message['text']:
+        announce_queue()
 
     time.sleep(1)
 
@@ -355,6 +381,8 @@ def process_profiles(message):
     lock.acquire()
     global profiles
     global profiles_last_seen
+    global highest_bidder
+    global previous_bidder
 
     new_profiles = message['profiles']
     if new_profiles:
@@ -366,15 +394,24 @@ def process_profiles(message):
 
         # remove timed out users and refresh timers on others
         now = time.time()
-        timeout = 120  # timeout 2m
+        timeout = 60 * 10  # timeout 10m
 
+        # update timestamps
         for name in profiles.keys():
             if name in new_profiles_names:
                 profiles_last_seen[name] = now
 
+        # cleanup
         profiles_last_seen_iter = dict(profiles_last_seen)
         for name, last_seen in profiles_last_seen_iter.iteritems():
             if not name in new_profiles_names:
+                # never remove the highest bidder
+                if highest_bidder and name == highest_bidder:
+                    continue
+                # never remove the previous bidder
+                if previous_bidder and name == previous_bidder:
+                    continue
+                # remove old profiles
                 if now > (last_seen + timeout):
                     del profiles_last_seen[name]
                     del profiles[name]
@@ -465,7 +502,7 @@ def process_bid(message):
         elif current_bid == 0 and bid_amount < starting_bid:
             text = 'Invalid bid from: ' + bidder + ', bidding starts at: ' + str(starting_bid)
         elif current_bid > 0 and bid_amount < (current_bid + min_bid):
-            text = 'Invalid bid from: ' + bidder + ', min bid is: ' + str(current_bid + min_bid)
+            text = 'Invalid bid from: ' + bidder + ', minimum bid is: ' + str(current_bid + min_bid)
         elif bid_amount > max_bid:
             text = 'Invalid bid from: ' + bidder + ', bid is greater than max bid.'
         else:
@@ -769,16 +806,10 @@ def process_request(message):
     global requesters
     global card_list
     global catalog
-    global banned
+    global current_auction
 
     requester = message['from']
     requested_scroll = message['text'].split(request_cmd)[1].strip()
-
-    if requester in banned:
-        text = 'Invalid request from ' + requester + '. You are banned.'
-        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
-        lock.release()
-        return
 
     scroll_exists = False
     scroll_name = None
@@ -801,6 +832,8 @@ def process_request(message):
     else:
         scroll_found_in_catalog = False
         for item in catalog:
+            if current_auction and item['id'] == current_auction['id']:
+                continue
             if item['name'] == scroll_name:
                 scroll_found_in_catalog = True
                 break
@@ -820,6 +853,7 @@ def process_request(message):
 
             text = 'Registered request from ' + requester + '. ' + scroll_name
             text += ' requested ' + str(requested[scroll_name]) + ' times'
+            logging.info(text)
 
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     lock.release()
@@ -857,13 +891,34 @@ def help():
     text = '[[ ' + bot_name + ' ]]\n'
     text += 'Send " !bid GOLD " to bid on the current auction\n'
     text += 'Send " !request SCROLL " to request a specific scroll\n'
-    text += 'Send " !announce " to see the current auction'
+    text += 'Send " !announce " to see the current auction\n'
+    text += 'Send " !hotstock " to see popular scrolls in stock\n'
+    text += 'Send " !queue " to see the auction queue'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
 
 ###
 ### ONE-OFF RESPONSES
 ###
+
+def announce_hotstock():
+    global hotstock
+    text = ', '.join(hotstock)
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
+
+def announce_queue():
+    global requested
+
+    queue = sorted(requested, key=requested.get, reverse=True)
+
+    if len(queue) > 0:
+        text = 'Auction queue is: ' + ', '.join(queue)
+    else:
+        text = 'Queue is empty'
+
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
 
 def ban_bidder(message):
     bidder = message['text'].split(ban_cmd)[1].strip()
@@ -944,10 +999,6 @@ def bot_profile_data(message):
     logging.info('Purse: ' + str(bot_profile['gold']))
 
 
-###
-### UTIL METHODS
-###
-
 def notify_requesters(requested_scroll):
     global requesters
     requesters_str = ', '.join([requestee for requestee, scroll in requesters.iteritems() if scroll == requested_scroll])
@@ -966,6 +1017,7 @@ def select_from_catalog():
     global requested
     global card_list
 
+    auction_item = None
     highest_rank = 0
     top_request = None
     for requested_scroll, num_requests in requested.iteritems():
@@ -973,25 +1025,18 @@ def select_from_catalog():
             top_request = requested_scroll
             highest_rank = num_requests
 
-    item_for_auction = None
     if top_request:
         for catalog_index, catalog_item in enumerate(catalog):
             if catalog_item['name'] == top_request:
                 requested.pop(top_request)
                 notify_requesters(top_request)
-                item_for_auction = catalog.pop(catalog_index)
+                auction_item = catalog.pop(catalog_index)
+                break
     else:
-        good_cards = []
-        for catalog_index, catalog_item in enumerate(catalog):
-            card_type = card_list[catalog_item['type_id']]
-            if card_type['rarity'] > 0:
-                good_cards.append(catalog_index)
-        random.shuffle(good_cards)
-        rand_cat_index = good_cards.pop()
-        item_for_auction = catalog.pop(rand_cat_index)
+        auction_item = catalog.pop(0)
 
     lock.release()
-    return item_for_auction
+    return auction_item
 
 
 def populate_catalog():
@@ -1003,6 +1048,7 @@ def populate_catalog():
     global catalog
     global card_list
     global prices
+    global current_auction
 
     if not prices:
         prices_r = requests.get('http://api.scrollspost.com/v1/prices/1-day')
@@ -1012,6 +1058,9 @@ def populate_catalog():
         catalog = []
         for library_item in library:
             if library_item['tradable'] is True:
+
+                if current_auction and current_auction['id'] == library_item['id']:
+                    continue
 
                 # get the base card
                 card_type = card_list[library_item['typeId']]
@@ -1033,12 +1082,27 @@ def populate_catalog():
 
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
+        process_hotstock()
     lock.release()
 
 
 def sync_collection(library):
     sync_r = requests.post('http://scrollstoolbox.com/collection/update?inGameName=' + bot_user, data=json.dumps(library))
     logging.info(sync_r.text)
+
+
+def process_hotstock():
+    global hotstock
+    global catalog
+
+    card_counts = {}
+    for card in catalog:
+        if card['name'] in card_counts:
+            card_counts[card['name']] += 1
+        else:
+            card_counts[card['name']] = 1
+
+    hotstock = [name for name, count in card_counts.iteritems() if count <= 3]
 
 
 def ban(bidder):
@@ -1054,6 +1118,7 @@ def ban(bidder):
 def unban(bidder):
     global banned
     if bidder in banned:
+        logging.info('Unbanned: ' + bidder)
         banned.pop(bidder)
         logging.info('Unbanned: ' + bidder)
 
