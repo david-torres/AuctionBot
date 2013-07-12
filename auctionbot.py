@@ -95,8 +95,8 @@ class AuctionThread(threading.Thread):
 
             # auction_cancel_threshold = 60  # 3m
             # auction_cancel_warn_threshold = 20  # 2m30s
-            auction_cancel_threshold = 90  # 1m20s
-            auction_cancel_warn_threshold = 30  # 30s
+            auction_cancel_threshold = 180  # 1m20s
+            auction_cancel_warn_threshold = 150  # 30s
             auction_cancel_warn = False
 
             # start the countdown timer
@@ -845,6 +845,7 @@ def process_request(message):
                 previous_request = requesters[requester]
                 requested[previous_request] -= 1
 
+            requested = {k: v for k, v in requested.iteritems() if v > 0}
             requesters[requester] = scroll_name
             if scroll_name in requested.keys():
                 requested[scroll_name] += 1
