@@ -383,7 +383,10 @@ def process_profiles(message):
     global highest_bidder
     global previous_bidder
 
-    new_profiles = message['updated']
+    new_profiles = message['profiles'] if 'profiles' in message else None
+    if not new_profiles:
+        new_profiles = message['updated'] if 'updated' in message else None
+
     if new_profiles:
         new_profiles_names = [p['name'] for p in new_profiles]
 
