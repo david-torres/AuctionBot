@@ -222,6 +222,7 @@ request_cmd = '!request'
 ban_cmd = '!ban'
 unban_cmd = '!unban'
 hotstock_cmd = '!hotstock'
+queue_cmd = '!queue'
 gimmie_cmd = '!gimmie'
 
 profiles = {}
@@ -1143,6 +1144,8 @@ def populate_catalog():
                         buy = price['price']['buy']
                         suggested = price['price']['suggested']
                         starting_bid = buy if buy > 0 else suggested
+                        if starting_bid < 25:
+                            starting_bid = 35
 
                         auction_item = {
                             'id': library_item['id'],
