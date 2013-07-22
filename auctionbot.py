@@ -202,6 +202,7 @@ global requested
 global requesters
 global lock
 global prices
+global gimmie_item
 
 config_file = open('config.yaml', 'r')
 config = yaml.load(config_file)
@@ -250,6 +251,7 @@ requested = {}
 requesters = {}
 prices = None
 hotstock = []
+gimmie_item = None
 
 auction_thread = AuctionThread()
 lock = threading.Lock()
