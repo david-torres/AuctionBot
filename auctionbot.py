@@ -386,6 +386,7 @@ def process_profiles(message):
     global highest_bidder
     global previous_bidder
 
+    logging.info(message)
     new_profiles = message['profiles'] if 'profiles' in message else None
     if not new_profiles:
         new_profiles = message['updated'] if 'updated' in message else None
