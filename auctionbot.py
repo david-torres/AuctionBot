@@ -709,8 +709,6 @@ def gimmie(message):
             scrolls.subscribe('TradeResponse', gimmie_invite_response)
             logging.info('Sent gimmie invite to: ' + user['name'] + ', card id: ' + str(gimmie_item['id']))
             scrolls.send({'msg': 'TradeInvite', 'profile': user['id']})
-
-    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     lock.release()
 
 
