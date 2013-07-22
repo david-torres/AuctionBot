@@ -222,7 +222,7 @@ request_cmd = '!request'
 ban_cmd = '!ban'
 unban_cmd = '!unban'
 hotstock_cmd = '!hotstock'
-queue_cmd = '!queue'
+gimmie_cmd = '!gimmie'
 
 profiles = {}
 profiles_last_seen = {}
@@ -334,6 +334,8 @@ def room_chat(message):
             ban_bidder(message)
         if 'text' in message and unban_cmd in message['text']:
             unban_bidder(message)
+        if 'text' in message and gimmie_cmd in message['text']:
+            gimmie(message)
 
     # handle !bid
     if 'text' in message and bid_cmd in message['text']:
@@ -660,6 +662,57 @@ def cancel_auction():
     lock.release()
 
 
+def gimmie(message):
+    lock.acquire()
+    """
+    Respond to the !request command
+    """
+    global card_list
+    global catalog
+    global profiles
+    global gimmie_item
+
+    requester = message['from']
+    requested_scroll = message['text'].split(gimmie_cmd)[1].strip()
+
+    scroll_exists = False
+    scroll_name = None
+    for card_id, card_type in card_list.iteritems():
+        if card_type['name'].lower() == requested_scroll.lower():
+            scroll_name = card_type['name']
+            scroll_exists = True
+            break
+
+    # fuzzy match
+    if not scroll_exists:
+        card_names = [card_type['name'] for card_id, card_type in card_list.iteritems()]
+        fuzzy_match = process.extractOne(requested_scroll, card_names)
+        if fuzzy_match and fuzzy_match[1] > 70:
+            scroll_name = fuzzy_match[0]
+            scroll_exists = True
+
+    if not scroll_exists:
+        text = 'Cannot give to ' + requester + '. No scroll named ' + requested_scroll
+    else:
+        scroll_found_in_catalog = False
+        for item in catalog:
+            if item['name'] == scroll_name:
+                scroll_found_in_catalog = True
+                gimmie_item = item
+                break
+
+        if not scroll_found_in_catalog:
+            text = 'Sorry ' + requester + '. ' + scroll_name + ' is out of stock.'
+        else:
+            user = profiles[requester]
+            scrolls.subscribe('TradeResponse', gimmie_invite_response)
+            logging.info('Sent gimmie invite to: ' + user['name'] + ', card id: ' + str(gimmie_item['id']))
+            scrolls.send({'msg': 'TradeInvite', 'profile': user['id']})
+
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+    lock.release()
+
+
 def send_trade_invite(user):
     scrolls.subscribe('TradeResponse', trade_invite_response)
     logging.info('Sent trade invite to: ' + user['name'] + ', card id: ' + str(current_auction['id']))
@@ -708,6 +761,14 @@ def trade_invite_response(message):
         resume_auction()
 
 
+def gimmie_invite_response(message):
+    global gimmie_item
+    if message['status'] == 'ACCEPT':
+        scrolls.subscribe('TradeView', gimmie_view_response)
+        logging.info('Adding card to trade: ' + gimmie_item['name'] + ', card id: ' + str(gimmie_item['id']))
+        scrolls.send({'msg': 'TradeAddCards', 'cardIds': [gimmie_item['id']]})
+
+
 def trade_view_response(message):
     global current_auction
     global current_bid
@@ -753,6 +814,14 @@ def trade_view_response(message):
             text += 'Banned: ' + highest_bidder
             scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
             resume_auction()
+
+
+def gimmie_view_response(message):
+    global gimmie_item
+    if message['to']['accepted']:
+        scrolls.send({'msg': 'TradeAcceptBargain'})
+        scrolls.unsubscribe('TradeView')
+        gimmie_item = None
 
 
 def auction_start_countdown(countdown_time):
