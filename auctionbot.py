@@ -817,7 +817,6 @@ def trade_view_response(message):
 
 def gimmie_view_response(message):
     global gimmie_item
-    logging.info(message)
     if message['to']['accepted']:
         scrolls.send({'msg': 'TradeAcceptBargain'})
         scrolls.unsubscribe('TradeView')
@@ -1027,7 +1026,6 @@ def bid_reminder(trade_room):
     global current_auction
     global gimmie_item
 
-    logging.info(gimmie_item)
     if gimmie_item:
         return
     text = 'You bid ' + str(current_bid) + 'g for ' + current_auction['name'] + '\n'
