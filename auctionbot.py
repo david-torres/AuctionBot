@@ -1,5 +1,6 @@
 from ScrollsSocketClient import ScrollsSocketClient
 from fuzzywuzzy import process
+from collections import OrderedDict
 import threading
 import random
 import requests
@@ -247,7 +248,7 @@ ban_threshold = 3600
 auction_end = None
 completed_auction = None
 restocking = False
-requested = {}
+requested = OrderedDict()
 requesters = {}
 prices = None
 hotstock = []
@@ -916,21 +917,29 @@ def process_request(message):
         else:
             if requester in requesters.keys():
                 previous_request = requesters[requester]
-                requested[previous_request] -= 1
+                requested[previous_request]['score'] -= 1
 
-            requested = {k: v for k, v in requested.iteritems() if v > 0}
             requesters[requester] = scroll_name
+
             if scroll_name in requested.keys():
-                requested[scroll_name] += 1
+                requested[scroll_name]['score'] += 1
             else:
-                requested[scroll_name] = 1
+                requested[scroll_name] = {
+                    'score': 1,
+                    'timestamp': time.time()
+                }
+
+                requested = requested.items()
+                requested.sort(key=lambda (k,d): (d['timestamp'],-d['score'],))
+                requested = OrderedDict([(k, v) for k,v in requested if v['score'] > 0])
 
             text = 'Registered request from ' + requester + '. ' + scroll_name
-            text += ' requested ' + str(requested[scroll_name]) + ' times'
+            text += ' requested ' + str(requested[scroll_name]['score']) + ' times'
             logging.info(text)
 
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
     lock.release()
+
 
 
 def announce():
@@ -984,10 +993,8 @@ def announce_hotstock():
 def announce_queue():
     global requested
 
-    queue = sorted(requested, key=requested.get, reverse=True)
-
-    if len(queue) > 0:
-        text = 'Auction queue is: ' + ', '.join(queue)
+    if len(requested) > 0:
+        text = 'Auction queue is: ' + ', '.join(requested)
     else:
         text = 'Queue is empty'
 
@@ -1096,20 +1103,15 @@ def select_from_catalog():
     global card_list
 
     auction_item = None
-    highest_rank = 0
-    top_request = None
-    for requested_scroll, num_requests in requested.iteritems():
-        if num_requests > highest_rank:
-            top_request = requested_scroll
-            highest_rank = num_requests
-
-    if top_request:
+    if len(requested) > 0:
+        top_request = requested.keys()[0]
         for catalog_index, catalog_item in enumerate(catalog):
             if catalog_item['name'] == top_request:
-                requested.pop(top_request)
+                requested.popitem(0)
                 notify_requesters(top_request)
                 auction_item = catalog.pop(catalog_index)
                 break
+
     else:
         auction_item = catalog.pop(0)
 
