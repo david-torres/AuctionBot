@@ -228,7 +228,7 @@ queue_cmd = '!queue'
 gimmie_cmd = '!gimmie'
 
 profiles = {}
-profiles_last_seen = {}
+to_be_removed = {}
 catalog = {}
 card_list = {}
 library = {}
@@ -385,47 +385,35 @@ def room_enter(message):
 def process_profiles(message):
     lock.acquire()
     global profiles
-    global profiles_last_seen
+    global to_be_removed
     global highest_bidder
     global previous_bidder
 
-    logging.info(message)
-    new_profiles = message['profiles'] if 'profiles' in message else None
-    if not new_profiles:
-        new_profiles = message['updated'] if 'updated' in message else None
-
-    if new_profiles:
-        new_profiles_names = [p['name'] for p in new_profiles]
-
+    new_profiles = None
+    if 'updated' in message:
+        new_profiles = message['updated']
         for new_profile in new_profiles:
-            if not new_profile in profiles.keys():
-                profiles[new_profile['name']] = new_profile
+            profiles[new_profile['name']] = new_profile
+            if new_profile['name'] in to_be_removed.keys():
+                del to_be_removed[new_profile['name']]
+    elif 'removed' in message:
+        rm_profiles = message['removed']
+        for rm_profile in rm_profiles:
+            if rm_profile['name'] == highest_bidder or rm_profile['name'] == previous_bidder:
+                to_be_removed[rm_profile['name']] = time.time()
+                continue
+            else:
+                del profiles[rm_profile['name']]
 
-        # remove timed out users and refresh timers on others
-        now = time.time()
-        timeout = 60 * 10  # timeout 10m
+    now = time.time()
+    timeout = 60 * 10  # timeout 10m
 
-        # update timestamps
-        for name in profiles.keys():
-            if name in new_profiles_names:
-                profiles_last_seen[name] = now
+    if len(to_be_removed) > 0:
+        for name in list(to_be_removed):
+            if to_be_removed[name] + timeout < now:
+                del to_be_removed[name]
 
-        # cleanup
-        profiles_last_seen_iter = dict(profiles_last_seen)
-        for name, last_seen in profiles_last_seen_iter.iteritems():
-            if not name in new_profiles_names:
-                # never remove the highest bidder
-                if highest_bidder and name == highest_bidder:
-                    continue
-                # never remove the previous bidder
-                if previous_bidder and name == previous_bidder:
-                    continue
-                # remove old profiles
-                if now > (last_seen + timeout):
-                    del profiles_last_seen[name]
-                    del profiles[name]
-
-        logging.info('Updated user list. ' + ', '.join([name for name in profiles.keys()]))
+    logging.info('Updated user list. ' + ', '.join([name for name in profiles.keys()]))
     lock.release()
 
 
