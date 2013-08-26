@@ -389,7 +389,6 @@ def process_profiles(message):
     global highest_bidder
     global previous_bidder
 
-    new_profiles = None
     if 'updated' in message:
         new_profiles = message['updated']
         for new_profile in new_profiles:
@@ -422,20 +421,23 @@ def restock():
     global bot_profile
     global restocking
 
-    pack_price = 1000
-    pack_item_id = 180
-    single_price = 100
-    single_item_id = 137
+    # pack_price = 1000
+    # pack_item_id = 180
+    # single_price = 100
+    # single_item_id = 137
+    single_price = 200
+    single_item_id = 1708255
 
     did_stock = False
 
     scrolls.subscribe('BuyStoreItemResponse', restock_items)
 
-    if bot_profile['gold'] >= pack_price:
-        scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
-        logging.info('Stocked a pack: waiting to restock')
-        did_stock = True
-    elif bot_profile['gold'] >= single_price:
+    # if bot_profile['gold'] >= pack_price:
+    #     scrolls.send({'itemId': pack_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
+    #     logging.info('Stocked a pack: waiting to restock')
+    #     did_stock = True
+    # elif bot_profile['gold'] >= single_price:
+    if bot_profile['gold'] >= single_price:
         scrolls.send({'itemId': single_item_id, 'payWithShards': False, 'msg': 'BuyStoreItem'})
         logging.info('Stocked a single: waiting to restock')
         did_stock = True
