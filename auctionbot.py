@@ -211,6 +211,7 @@ config = yaml.load(config_file)
 email = config['email']
 password = config['password']
 room = config['room']
+admin_room = config['admin_room']
 bot_name = config['bot_name']
 bot_user = config['bot_user']
 bot_profile = None
@@ -290,6 +291,9 @@ def run(message):
     # enter the room
     scrolls.send({'msg': 'RoomEnter', 'roomName': room})
 
+    # enter the admin room
+    scrolls.send({'msg': 'RoomEnter', 'roomName': admin_room})
+
     # start the main auction loop
     auction_thread.start()
 
@@ -306,10 +310,6 @@ def room_info(message):
 
     process_profiles(message)
 
-    # stop spamming the room
-    # if live:
-    #     announce()
-
 
 def room_chat(message):
     """
@@ -320,8 +320,9 @@ def room_chat(message):
     global live
     global banned
 
-    if 'roomName' in message and not message['roomName'] == room:
-        return
+    if 'roomName' in message:
+        if message['roomName'] not in [room, admin_room]:
+            return
 
     # bot ignores messages from itself
     if 'text' in message and message['from'] == bot_user:
@@ -374,7 +375,7 @@ def room_enter(message):
     This function is executed upon receiving the 'RoomEnter' event
     Announces the bot's presence in the room.
     """
-    if message['roomName'] == room:
+    if message['roomName'] == room or message['roomName'] == admin_room:
         text = bot_name + ' is activated.'
         logging.info(text)
         scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
