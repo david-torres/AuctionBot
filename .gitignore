@@ -2,3 +2,4 @@ venv
 *.pyc
 *.log
 config.yaml
+test.py

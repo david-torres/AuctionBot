@@ -267,6 +267,9 @@ def run(message):
     """ This function is executed upon receiving the 'SignIn' event """
     global current_auction
 
+    scrolls.subscribe('ProfileInfo', bot_profile_info)
+    scrolls.send({'msg': 'JoinLobby'})
+
     # get the bot's profile data
     scrolls.subscribe('ProfileDataInfo', bot_profile_data)
     scrolls.send({'msg': 'ProfileDataInfo'})
@@ -1234,9 +1237,8 @@ logging.basicConfig(filename="app.log", level=logging.INFO)
 # init the scrolls client
 scrolls = ScrollsSocketClient()
 
-# subscribe to the SignIn event with function run()
+# subscribe to the FirstConnect event with function run()
 scrolls.subscribe('FirstConnect', run)
-scrolls.subscribe('ProfileInfo', bot_profile_info)
 
 login_message = {
     'authHash': '96cabe23616642d9f9fa340f3685b2e10f285587f74c36317a9df6782b43f4df',
