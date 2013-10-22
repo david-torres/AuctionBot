@@ -375,6 +375,7 @@ def room_enter(message):
     This function is executed upon receiving the 'RoomEnter' event
     Announces the bot's presence in the room.
     """
+
     if message['roomName'] == room or message['roomName'] == admin_room:
         text = bot_name + ' is activated.'
         logging.info(text)
@@ -1234,7 +1235,7 @@ logging.basicConfig(filename="app.log", level=logging.INFO)
 scrolls = ScrollsSocketClient()
 
 # subscribe to the SignIn event with function run()
-scrolls.subscribe('SignIn', run)
+scrolls.subscribe('FirstConnect', run)
 scrolls.subscribe('ProfileInfo', bot_profile_info)
 
 login_message = {
