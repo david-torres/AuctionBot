@@ -58,7 +58,7 @@ class ReceiveThread(Thread):
 
 
 class ScrollsSocketClient(object):
-    """
+    '''
     A Python client for the Scrolls socket server.
 
     Usage:
@@ -67,23 +67,21 @@ class ScrollsSocketClient(object):
 
     scrolls = ScrollsApi(YOUR_SCROLLS_EMAIL, YOUR_SCROLLS_PASSWORD)
 
-    """
+    '''
 
     queue = Queue()
     subscribers = {}
     _socket_recv = 8192
     _scrolls_host = '54.208.22.193'
     _scrolls_port = 8081
-    _scrolls_publickey = """-----BEGIN PUBLIC KEY-----
+    _scrolls_publickey = '''-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYUK5tWE8Yb564e5VBs05uqh38
 mLSRF76iHY4IVHtpXT3FiI6SWoVDyOAiAAe/IJwzUmjCp8V4nmNX26nQuHR4iK/c
 U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
 3T8DbLpZaJeXTle7VwIDAQAB
------END PUBLIC KEY-----"""
+-----END PUBLIC KEY-----'''
 
-    def __init__(self, email, password):
-        self.email = email
-        self.password = password
+    def __init__(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self._scrolls_host, self._scrolls_port))
 
@@ -95,13 +93,8 @@ U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
         self.receive_thread.start()
         self.message_thread.start()
 
-    def login(self):
-        login_params = {
-            'msg': 'SignIn',
-            'email': self._encrypt(self.email),
-            'password': self._encrypt(self.password)
-        }
-        self.send(login_params)
+    def login(self, login_message):
+        self.send(login_message)
         self.ping_thread.start()
 
     def subscribe(self, event, callback):
@@ -133,9 +126,9 @@ U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
 
                 try:
                     # line breaks means we are handling multiple responses
-                    if stream_data.find("\n\n"):
+                    if stream_data.find('\n\n'):
                         # split and parse each response
-                        for stream_data_line in stream_data.split("\n\n"):
+                        for stream_data_line in stream_data.split('\n\n'):
                             # try to load as JSON
                             data_json = json.loads(stream_data_line)
 
@@ -143,7 +136,7 @@ U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
                             self.queue.put(data_json)
 
                             # remove the line from stream data
-                            stream_data = stream_data.replace(stream_data_line + "\n\n", '')
+                            stream_data = stream_data.replace(stream_data_line + '\n\n', '')
 
                     # we've processed the available message, reset stream_data
                     stream_data = ''

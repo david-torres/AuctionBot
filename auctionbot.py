@@ -1231,11 +1231,27 @@ def completed_auction_status():
 logging.basicConfig(filename="app.log", level=logging.INFO)
 
 # init the scrolls client
-scrolls = ScrollsSocketClient(email, password)
+scrolls = ScrollsSocketClient()
 
 # subscribe to the SignIn event with function run()
 scrolls.subscribe('SignIn', run)
 scrolls.subscribe('ProfileInfo', bot_profile_info)
 
+login_message = {
+    'authHash': '96cabe23616642d9f9fa340f3685b2e10f285587f74c36317a9df6782b43f4df',
+    'accessToken': {
+        'accessToken': '5e802f02487d4122b30b3d3779b858ee',
+        'clientToken': '57a8f9a83ab492e9ecac303a34e4df574a0fe3b6',
+        'user': {
+            'id': '8d5d73a8a99c419d8027415bda8f81d1'
+        },
+        'selectedProfile': {
+            'id': 'c6bf54340cf5443f91dee0c343daaf37',
+            'name': 'AuctionBot'
+        }
+    },
+    'msg': 'FirstConnect'
+}
+
 # login to the server
-scrolls.login()
+scrolls.login(login_message)
