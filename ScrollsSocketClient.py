@@ -1,8 +1,6 @@
-from Crypto.Cipher import PKCS1_v1_5
-from Crypto.PublicKey import RSA
-from base64 import b64encode
 from threading import Thread
 from Queue import Queue
+import requests
 import socket
 import json
 import time
@@ -65,35 +63,57 @@ class ScrollsSocketClient(object):
     YOUR_SCROLLS_EMAIL = 'user@example.com'
     YOUR_SCROLLS_PASSWORD = 'password'
 
-    scrolls = ScrollsApi(YOUR_SCROLLS_EMAIL, YOUR_SCROLLS_PASSWORD)
+    scrolls = ScrollsSocketClient(YOUR_SCROLLS_EMAIL, YOUR_SCROLLS_PASSWORD)
 
     '''
 
+    # queue vars
     queue = Queue()
     subscribers = {}
+
+    # auth vars
+    auth_url = 'https://authserver.mojang.com/authenticate'
+    json_header = {'content-type':'application/json'}
+    username = None
+    password = None
+
+    # socket vars
     _socket_recv = 8192
     _scrolls_host = '54.208.22.193'
     _scrolls_port = 8081
-    _scrolls_publickey = '''-----BEGIN PUBLIC KEY-----
-MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYUK5tWE8Yb564e5VBs05uqh38
-mLSRF76iHY4IVHtpXT3FiI6SWoVDyOAiAAe/IJwzUmjCp8V4nmNX26nQuHR4iK/c
-U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
-3T8DbLpZaJeXTle7VwIDAQAB
------END PUBLIC KEY-----'''
+    _reconnect_sleep = 10
 
-    def __init__(self):
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((self._scrolls_host, self._scrolls_port))
+        self.connect()
 
         self.ping_thread = PingThread(self)
         self.message_thread = MessageThread(self)
         self.receive_thread = ReceiveThread(self)
 
-        # self.ping_thread.start()
         self.receive_thread.start()
         self.message_thread.start()
 
-    def login(self, login_message):
+    def login(self):
+        params = json.dumps({
+            'username': self.username,
+            'password': self.password,
+            'requestUser': True,
+            'agent': {
+                'name': 'Scrolls',
+                'version': 1
+            },
+        })
+
+        r = requests.post(self.auth_url, data=params, headers=self.json_header)
+        login_message = {
+            'accessToken': r.json(),
+            'msg': 'FirstConnect'
+        }
+
         self.send(login_message)
         self.ping_thread.start()
 
@@ -114,12 +134,23 @@ U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
         data_json = None
 
         while (1):
-            # read data from the buffer
-            data = self.socket.recv(self._socket_recv)
-            if not data:
-                # no more data being transmitted
+            try:
+                # read data from the buffer
+                data = self.socket.recv(self._socket_recv)
+            except socket.error:
+                # socket error, disconnected
                 stream_data = ''
-                break
+                time.sleep(self._reconnect_sleep)
+                self.connect()
+                continue
+
+            if not data:
+                # no more data being transmitted, i.e disconnected
+                stream_data = ''
+                time.sleep(self._reconnect_sleep)
+                self.connect()
+                continue
+
             else:
                 # append data to the response
                 stream_data += data
@@ -144,6 +175,9 @@ U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
                     # invalid json, incomplete data
                     pass
 
+    def connect(self):
+        self.socket.connect((self._scrolls_host, self._scrolls_port))
+
     def quit(self):
         # stop all threads and close the socket
         self.receive_thread.stopped = True
@@ -156,9 +190,3 @@ U9G7XhpBLfmQx0Esx5tJbYM0GR9Ww4XeXj3xZZBL39MciohrFurBENTFtrlu0EtM
         self.ping_thread._Thread__stop()
 
         self.socket.close()
-
-    def _encrypt(self, data):
-        key = RSA.importKey(self._scrolls_publickey)
-        cipher = PKCS1_v1_5.new(key)
-        encrypted_data = cipher.encrypt(data)
-        return b64encode(encrypted_data)

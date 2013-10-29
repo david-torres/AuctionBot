@@ -208,7 +208,7 @@ global gimmie_item
 config_file = open('config.yaml', 'r')
 config = yaml.load(config_file)
 
-email = config['email']
+username = config['username']
 password = config['password']
 room = config['room']
 admin_room = config['admin_room']
@@ -216,7 +216,7 @@ bot_name = config['bot_name']
 bot_user = config['bot_user']
 bot_profile = None
 
-admins = ['detour_', 'aTidwell', 'Tidwell3', 'ScrollsToolbox']
+admins = ['detour_', 'aTidwell', 'Tidwell2', 'Tidwell3', 'ScrollsToolbox']
 
 bid_cmd = '!bid'
 help_cmd = '!help'
@@ -266,8 +266,6 @@ lock = threading.Lock()
 def run(message):
     """ This function is executed upon receiving the 'SignIn' event """
     global current_auction
-
-    scrolls.subscribe('ProfileInfo', bot_profile_info)
     scrolls.send({'msg': 'JoinLobby'})
 
     # get the bot's profile data
@@ -430,8 +428,6 @@ def restock():
     pack_item_id = 180
     single_price = 100
     single_item_id = 137
-    # single_price = 200  # decay
-    # single_item_id = 1708255  # decay
 
     did_stock = False
 
@@ -1115,7 +1111,7 @@ def select_from_catalog():
 
 def populate_catalog():
     """
-    Fetches the latest prices from scrollspost and populates our catalog of rares and uncommons
+    Fetches the latest prices from scrollsguide and populates our catalog of rares and uncommons
     """
     lock.acquire()
     global library
@@ -1125,8 +1121,8 @@ def populate_catalog():
     global current_auction
 
     if not prices:
-        prices_r = requests.get('http://api.scrollspost.com/v1/prices/1-day')
-        prices = prices_r.json()
+        prices_r = requests.get('http://a.scrollsguide.com/prices')
+        prices = prices_r.json()['data']
 
     if prices:
         catalog = []
@@ -1141,12 +1137,12 @@ def populate_catalog():
 
                 # pricing
                 for price in prices:
-                    if price['card_id'] == library_item['typeId']:
-                        buy = price['price']['buy']
-                        suggested = price['price']['suggested']
-                        starting_bid = buy if buy > 0 else suggested
-                        if starting_bid < 25:
-                            starting_bid = 35
+                    if price['id'] == library_item['typeId']:
+                        buy = price['buy']
+                        if buy > 0:
+                            starting_bid = buy
+                        else:
+                            continue
 
                         auction_item = {
                             'id': library_item['id'],
@@ -1235,26 +1231,11 @@ def completed_auction_status():
 logging.basicConfig(filename="app.log", level=logging.INFO)
 
 # init the scrolls client
-scrolls = ScrollsSocketClient()
+scrolls = ScrollsSocketClient(username, password)
 
 # subscribe to the FirstConnect event with function run()
 scrolls.subscribe('FirstConnect', run)
-
-login_message = {
-    'authHash': '96cabe23616642d9f9fa340f3685b2e10f285587f74c36317a9df6782b43f4df',
-    'accessToken': {
-        'accessToken': '5e802f02487d4122b30b3d3779b858ee',
-        'clientToken': '57a8f9a83ab492e9ecac303a34e4df574a0fe3b6',
-        'user': {
-            'id': '8d5d73a8a99c419d8027415bda8f81d1'
-        },
-        'selectedProfile': {
-            'id': 'c6bf54340cf5443f91dee0c343daaf37',
-            'name': 'AuctionBot'
-        }
-    },
-    'msg': 'FirstConnect'
-}
+scrolls.subscribe('ProfileInfo', bot_profile_info)
 
 # login to the server
-scrolls.login(login_message)
+scrolls.login()
