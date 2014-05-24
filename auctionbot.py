@@ -214,7 +214,7 @@ room = config['room']
 admin_room = config['admin_room']
 bot_name = config['bot_name']
 bot_user = config['bot_user']
-bot_profile = None
+bot_profile = {}
 
 admins = ['detour_', 'aTidwell', 'Tidwell2', 'Tidwell3', 'ScrollsToolbox']
 
@@ -252,6 +252,7 @@ restocking = False
 requested = OrderedDict()
 requesters = {}
 prices = None
+experimental_prices = None
 hotstock = []
 gimmie_item = None
 
@@ -380,7 +381,10 @@ def room_enter(message):
     if message['roomName'] == room or message['roomName'] == admin_room:
         text = bot_name + ' is activated.'
         logging.info(text)
-        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+        if message['roomName'] == room:
+            scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+        else:
+            scrolls.send({'msg': 'RoomChatMessage', 'roomName': admin_room, 'text': text})
     else:
         bid_reminder(message['roomName'])
 
@@ -698,18 +702,19 @@ def gimmie(message):
 
         if not scroll_found_in_catalog:
             text = 'Sorry ' + requester + '. ' + scroll_name + ' is out of stock.'
+            scrolls.send({'msg': 'RoomChatMessage', 'roomName': admin_room, 'text': text})
         else:
             user = profiles[requester]
             scrolls.subscribe('TradeResponse', gimmie_invite_response)
             logging.info('Sent gimmie invite to: ' + user['name'] + ', card id: ' + str(gimmie_item['id']))
-            scrolls.send({'msg': 'TradeInvite', 'profile': user['id']})
+            scrolls.send({'msg': 'TradeInvite', 'profile': user['profileId']})
     lock.release()
 
 
 def send_trade_invite(user):
     scrolls.subscribe('TradeResponse', trade_invite_response)
     logging.info('Sent trade invite to: ' + user['name'] + ', card id: ' + str(current_auction['id']))
-    scrolls.send({'msg': 'TradeInvite', 'profile': user['id']})
+    scrolls.send({'msg': 'TradeInvite', 'profile': user['profileId']})
 
 
 def trade_invite_response(message):
@@ -1062,7 +1067,7 @@ def bot_profile_info(message):
     """
     global bot_profile
     if 'profile' in message and 'name' in message['profile'] and message['profile']['name'] == bot_user:
-        bot_profile = message['profile']
+        bot_profile.update(message['profile'])
 
 
 def bot_profile_data(message):
@@ -1118,11 +1123,16 @@ def populate_catalog():
     global catalog
     global card_list
     global prices
+    global experimental_prices
     global current_auction
 
     if not prices:
         prices_r = requests.get('http://a.scrollsguide.com/prices')
         prices = prices_r.json()['data']
+
+    if not experimental_prices:
+        experimental_prices_r = requests.get('http://a.scrollsguide.com/experimentalprices')
+        experimental_prices = experimental_prices_r.json()['data']
 
     if prices:
         catalog = []
@@ -1136,12 +1146,14 @@ def populate_catalog():
                 card_type = card_list[library_item['typeId']]
 
                 # pricing
+                check_experimental_prices = False
                 for price in prices:
                     if price['id'] == library_item['typeId']:
                         buy = price['buy']
                         if buy > 0:
                             starting_bid = buy
                         else:
+                            check_experimental_prices = True
                             continue
 
                         auction_item = {
@@ -1151,6 +1163,23 @@ def populate_catalog():
                             'starting_bid': starting_bid
                         }
                         catalog.append(auction_item)
+
+                if check_experimental_prices:
+                    for price in experimental_prices:
+                        if price['id'] == library_item['typeId']:
+                            buy = price['buy']['price']
+                            if buy > 0:
+                                starting_bid = buy
+                            else:
+                                continue
+
+                            auction_item = {
+                                'id': library_item['id'],
+                                'type_id': card_type['id'],
+                                'name': card_type['name'],
+                                'starting_bid': starting_bid
+                            }
+                            catalog.append(auction_item)
 
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
