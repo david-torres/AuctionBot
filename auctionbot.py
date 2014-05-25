@@ -707,14 +707,14 @@ def gimmie(message):
             user = profiles[requester]
             scrolls.subscribe('TradeResponse', gimmie_invite_response)
             logging.info('Sent gimmie invite to: ' + user['name'] + ', card id: ' + str(gimmie_item['id']))
-            scrolls.send({'msg': 'TradeInvite', 'profile': user['profileId']})
+            scrolls.send({'msg': 'TradeInvite', 'profileId': user['profileId']})
     lock.release()
 
 
 def send_trade_invite(user):
     scrolls.subscribe('TradeResponse', trade_invite_response)
     logging.info('Sent trade invite to: ' + user['name'] + ', card id: ' + str(current_auction['id']))
-    scrolls.send({'msg': 'TradeInvite', 'profile': user['profileId']})
+    scrolls.send({'msg': 'TradeInvite', 'profileId': user['profileId']})
 
 
 def trade_invite_response(message):
