@@ -1126,6 +1126,9 @@ def populate_catalog():
     global experimental_prices
     global current_auction
 
+    jank_list = []
+    seen_scrolls = {}
+
     if not prices:
         prices_r = requests.get('http://a.scrollsguide.com/prices')
         prices = prices_r.json()['data']
@@ -1144,6 +1147,15 @@ def populate_catalog():
 
                 # get the base card
                 card_type = card_list[library_item['typeId']]
+
+                if library_item['level'] == 0:
+                    if card_type['id'] in seen_scrolls.keys():
+                        seen_scrolls[card_type['id']] = seen_scrolls[card_type['id']] + 1
+                    else:
+                        seen_scrolls[card_type['id']] = 1
+
+                    if seen_scrolls[card_type['id']] > 7:
+                        jank_list.append(library_item['id'])
 
                 # pricing
                 check_experimental_prices = False
@@ -1181,10 +1193,15 @@ def populate_catalog():
                             }
                             catalog.append(auction_item)
 
+        sell_jank(jank_list)
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
         process_hotstock()
     lock.release()
+
+
+def sell_jank(jank_list):
+    scrolls.send({'msg': 'SellCards', 'cardIds': jank_list})
 
 
 def sync_collection(library):
