@@ -253,6 +253,7 @@ requested = OrderedDict()
 requesters = {}
 prices = None
 experimental_prices = None
+clockwork_prices = None
 hotstock = []
 gimmie_item = None
 
@@ -1124,6 +1125,7 @@ def populate_catalog():
     global card_list
     global prices
     global experimental_prices
+    global clockwork_prices
     global current_auction
 
     jank_list = []
@@ -1137,10 +1139,16 @@ def populate_catalog():
         experimental_prices_r = requests.get('http://a.scrollsguide.com/experimentalprices')
         experimental_prices = experimental_prices_r.json()['data']
 
+    if not clockwork_prices:
+        clockwork_prices_r = requests.get('http://www.kimonolabs.com/api/4pxmtz8o?apikey=792af1db42af6a41419730274e89d4d2')
+        clockwork_prices = clockwork_prices_r.json()['results']['prices']
+
     if prices:
         catalog = []
         for library_item in library:
             if library_item['tradable'] is True:
+                check_experimental_prices = False
+                check_clockwork_prices = False
 
                 if current_auction and current_auction['id'] == library_item['id']:
                     continue
@@ -1158,7 +1166,6 @@ def populate_catalog():
                         jank_list.append(library_item['id'])
 
                 # pricing
-                check_experimental_prices = False
                 for price in prices:
                     if price['id'] == library_item['typeId']:
                         buy = price['buy']
@@ -1180,6 +1187,24 @@ def populate_catalog():
                     for price in experimental_prices:
                         if price['id'] == library_item['typeId']:
                             buy = price['buy']['price']
+                            if buy > 0:
+                                starting_bid = buy
+                            else:
+                                check_clockwork_prices = True
+                                continue
+
+                            auction_item = {
+                                'id': library_item['id'],
+                                'type_id': card_type['id'],
+                                'name': card_type['name'],
+                                'starting_bid': starting_bid
+                            }
+                            catalog.append(auction_item)
+
+                if check_clockwork_prices:
+                    for price in clockwork_prices:
+                        if price['name'] == card_type['name']:
+                            buy = int(price['buy'])
                             if buy > 0:
                                 starting_bid = buy
                             else:
