@@ -127,7 +127,12 @@ class ScrollsSocketClient(object):
 
     def send(self, params):
         # send message
-        self.socket.send(json.dumps(params))
+        try:
+            self.socket.send(json.dumps(params))
+        except socket.error:
+            # socket error, disconnected
+            time.sleep(self._reconnect_sleep)
+            self.connect()
 
     def receive(self):
         stream_data = ''
