@@ -87,7 +87,7 @@ class ScrollsSocketClient(object):
         self.username = username
         self.password = password
 
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket = None
         self.connect()
 
         self.ping_thread = PingThread(self)
@@ -131,6 +131,8 @@ class ScrollsSocketClient(object):
             self.socket.send(json.dumps(params))
         except socket.error:
             # socket error, disconnected
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
             time.sleep(self._reconnect_sleep)
             self.connect()
 
@@ -145,6 +147,8 @@ class ScrollsSocketClient(object):
             except socket.error:
                 # socket error, disconnected
                 stream_data = ''
+                self.socket.shutdown(socket.SHUT_RDWR)
+                self.socket.close()
                 time.sleep(self._reconnect_sleep)
                 self.connect()
                 continue
@@ -152,6 +156,8 @@ class ScrollsSocketClient(object):
             if not data:
                 # no more data being transmitted, i.e disconnected
                 stream_data = ''
+                self.socket.shutdown(socket.SHUT_RDWR)
+                self.socket.close()
                 time.sleep(self._reconnect_sleep)
                 self.connect()
                 continue
@@ -181,6 +187,7 @@ class ScrollsSocketClient(object):
                     pass
 
     def connect(self):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self._scrolls_host, self._scrolls_port))
 
     def quit(self):
@@ -194,4 +201,5 @@ class ScrollsSocketClient(object):
         self.ping_thread.stopped = True
         self.ping_thread._Thread__stop()
 
+        self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
