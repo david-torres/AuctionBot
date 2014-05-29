@@ -138,7 +138,7 @@ class ScrollsSocketClient(object):
         stream_data = ''
         data_json = None
 
-        while (1):
+        while (True):
             try:
                 # read data from the buffer
                 data = self.socket.recv(self._socket_recv)

@@ -410,7 +410,8 @@ def process_profiles(message):
                 to_be_removed[rm_profile['name']] = time.time()
                 continue
             else:
-                del profiles[rm_profile['name']]
+                if rm_profile['name'] in profiles.keys():
+                    del profiles[rm_profile['name']]
 
     now = time.time()
     timeout = 60 * 10  # timeout 10m
