@@ -357,6 +357,8 @@ def room_chat(message):
     if 'text' in message and announce_cmd == message['text']:
         if live:
             announce()
+        else:
+            announce_inactive()
 
     # handle !help
     if 'text' in message and help_cmd == message['text']:
@@ -960,6 +962,13 @@ def announce():
     else:
         text += 'Starting bid: ' + str(starting_bid) + 'g\n'
     text += '-----\n'
+    text += 'Send !help for commands'
+    scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+
+
+def announce_inactive():
+    text = '[[ ' + bot_name + ' ]]\n'
+    text += 'There is no auction running right now. Please wait for the next one to start.\n'
     text += 'Send !help for commands'
     scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
 
