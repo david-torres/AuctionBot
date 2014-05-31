@@ -1261,7 +1261,8 @@ def populate_catalog():
 def sell_jank(jank_list):
     global card_list
     for jank in jank_list:
-        logging.info('Selling jank: ' + card_list[jank['typeId']])
+        card_type = card_list[jank['typeId']]
+        logging.info('Selling jank: ' + card_type['name'])
     scrolls.send({'msg': 'SellCards', 'cardIds': jank_list})
 
 
