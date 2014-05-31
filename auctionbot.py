@@ -716,9 +716,29 @@ def gimmie(message):
 
 
 def send_trade_invite(user):
+    scrolls.subscribe('TradeInvite', trade_invite)
     scrolls.subscribe('TradeResponse', trade_invite_response)
     logging.info('Sent trade invite to: ' + user['name'] + ', card id: ' + str(current_auction['id']))
     scrolls.send({'msg': 'TradeInvite', 'profileId': user['profileId']})
+
+
+def trade_invite(message):
+    global bot_name
+    global highest_bidder
+    global current_auction
+
+    if message['msg'] == 'Fail':
+        # bidder declinded the trade invite, BAN!
+        ban(highest_bidder)
+        text = '[[ ' + bot_name + ' ]]\n'
+        text += 'DECLINED TRADE! Auction: ' + current_auction['name'] + '\n'
+        text += 'Banned: ' + highest_bidder
+
+        logging.info('Trade was declined by ' + highest_bidder + ', card id: ' + str(current_auction['id']))
+        scrolls.send({'msg': 'RoomChatMessage', 'roomName': room, 'text': text})
+        resume_auction()
+
+    scrolls.unsubscribe('TradeInvite')
 
 
 def trade_invite_response(message):
@@ -1228,7 +1248,10 @@ def populate_catalog():
                             }
                             catalog.append(auction_item)
 
-        sell_jank(jank_list)
+        if jank_list:
+            logging.info('Selling jank')
+            sell_jank(jank_list)
+
         logging.info('Populated catalog, ' + str(len(catalog)) + ' scrolls for sale')
         random.shuffle(catalog)
         process_hotstock()
@@ -1236,6 +1259,9 @@ def populate_catalog():
 
 
 def sell_jank(jank_list):
+    global card_list
+    for jank in jank_list:
+        logging.info('Selling jank: ' + card_list[jank['typeId']])
     scrolls.send({'msg': 'SellCards', 'cardIds': jank_list})
 
 

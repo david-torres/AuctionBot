@@ -132,31 +132,34 @@ class ScrollsSocketClient(object):
             try:
                 self.socket.send(json.dumps(params))
             except socket.error:
+                print 'reconnecting... send error'
                 # socket error, disconnected
-                # self.restart()
-                pass
+                self.restart()
 
     def receive(self):
         stream_data = ''
         data_json = None
 
-        if not self.connected:
-            return
-
         while (True):
+            if not self.connected:
+                print 'receive not connected'
+                return
+
             try:
                 # read data from the buffer
                 data = self.socket.recv(self._socket_recv)
             except socket.error:
+                print 'reconnecting... socket error'
                 # socket error, disconnected
                 stream_data = ''
-                # self.restart()
+                self.restart()
                 return
 
             if not data:
+                print 'reconnecting... no data'
                 # no more data being transmitted, i.e disconnected
                 stream_data = ''
-                # self.restart()
+                self.restart()
                 return
 
             else:
@@ -170,6 +173,7 @@ class ScrollsSocketClient(object):
                         for stream_data_line in stream_data.split('\n\n'):
                             # try to load as JSON
                             data_json = json.loads(stream_data_line)
+                            print data_json
 
                             # we have a response, add it to the queue
                             self.queue.put(data_json)
@@ -184,26 +188,20 @@ class ScrollsSocketClient(object):
                     pass
 
     def connect(self):
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.connect((self._scrolls_host, self._scrolls_port))
-            self.connected = True
-        except socket.error:
-            self.connected = False
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect((self._scrolls_host, self._scrolls_port))
+        self.connected = True
 
     def restart(self):
-        self.quit()
-        time.sleep(self._reconnect_sleep)
-        self.connect()
+        while not self.connected:
+            self.quit()
+            time.sleep(self._reconnect_sleep)
+            self.connect()
 
-        self.ping_thread = PingThread(self)
-        self.message_thread = MessageThread(self)
-        self.receive_thread = ReceiveThread(self)
+            self.receive_thread.start()
+            self.message_thread.start()
 
-        self.receive_thread.start()
-        self.message_thread.start()
-
-        self.login()
+            self.login()
 
     def quit(self):
         self.connected = False
